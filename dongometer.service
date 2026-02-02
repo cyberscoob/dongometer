@@ -1,0 +1,16 @@
+[Unit]
+Description=The Dongometer - Donghouse Chaos Metrics
+After=network.target
+
+[Service]
+Type=simple
+User=scoob
+WorkingDirectory=/home/scoob/dongometer
+ExecStart=/usr/bin/python3 -u /home/scoob/dongometer/simple_app.py
+Restart=always
+RestartSec=3
+StandardOutput=append:/home/scoob/dongometer/dongometer.log
+StandardError=append:/home/scoob/dongometer/dongometer.log
+
+[Install]
+WantedBy=multi-user.target

@@ -15,8 +15,57 @@ from collections import deque
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'dongometer.db')
 
-# Matrix indexer count (cached for 60 seconds)
+# Matrix indexer cache
 _indexer_cache = {'count': None, 'timestamp': 0}
+_metrics_cache = {'data': None, 'timestamp': 0}
+
+def get_indexer_metrics():
+    """Get message counts from MongoDB indexer for last 5min/10min/hour"""
+    global _metrics_cache
+    
+    # Return cached if recent (5 seconds)
+    if _metrics_cache['data'] is not None:
+        if time.time() - _metrics_cache['timestamp'] < 5:
+            return _metrics_cache['data']
+    
+    try:
+        import subprocess
+        import json
+        
+        now = datetime.now()
+        five_min_ago = (now - timedelta(minutes=5)).timestamp() * 1000
+        ten_min_ago = (now - timedelta(minutes=10)).timestamp() * 1000
+        hour_ago = (now - timedelta(hours=1)).timestamp() * 1000
+        
+        # Query MongoDB for recent events
+        query = f"""
+        var fiveMin = db.events.countDocuments({{"origin_server_ts": {{$gt: {int(five_min_ago)}}}}});
+        var tenMin = db.events.countDocuments({{"origin_server_ts": {{$gt: {int(ten_min_ago)}}}}});
+        var hour = db.events.countDocuments({{"origin_server_ts": {{$gt: {int(hour_ago)}}}}});
+        print(JSON.stringify({{fiveMin: fiveMin, tenMin: tenMin, hour: hour}}));
+        """
+        
+        result = subprocess.run(
+            ['mongosh', '--quiet', 
+             'mongodb://mongo:27017/matrix_index', 
+             '--eval', query],
+            capture_output=True, text=True, timeout=5
+        )
+        
+        if result.returncode == 0:
+            # Parse the JSON output
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line.startswith('{'):
+                    data = json.loads(line)
+                    _metrics_cache['data'] = data
+                    _metrics_cache['timestamp'] = time.time()
+                    return data
+        return None
+    except Exception as e:
+        print(f"Indexer metrics error: {e}")
+        return None
 
 def get_indexer_count():
     """Get total message count from Matrix indexer MongoDB"""
@@ -89,12 +138,21 @@ def calculate_chaos_score():
         pass
     
     # APOCALYPSE MODE — ALL LIMITERS REMOVED
-    recent_msgs = sum(1 for t in metrics['chat_velocity'] 
-                     if now - t < timedelta(minutes=5))
-    score += recent_msgs * 2  # NO CAP
+    # Try to get metrics from MongoDB indexer first
+    indexer_data = get_indexer_metrics()
     
-    recent_doors = sum(1 for t in metrics['door_events'] 
-                      if now - t < timedelta(minutes=10))
+    if indexer_data:
+        # Use MongoDB as source of truth
+        recent_msgs = indexer_data.get('fiveMin', 0)
+        recent_doors = indexer_data.get('tenMin', 0) // 2  # Estimate doors as half
+    else:
+        # Fallback to in-memory deques
+        recent_msgs = sum(1 for t in metrics['chat_velocity'] 
+                         if now - t < timedelta(minutes=5))
+        recent_doors = sum(1 for t in metrics['door_events'] 
+                          if now - t < timedelta(minutes=10))
+    
+    score += recent_msgs * 2  # NO CAP
     score += recent_doors * 5  # NO CAP
     
     hour = now.hour
@@ -185,10 +243,18 @@ class DongometerHandler(BaseHTTPRequestHandler):
         except:
             pass
         
-        chat_5m = sum(1 for t in metrics['chat_velocity'] 
-                     if now - t < timedelta(minutes=5))
-        door_10m = sum(1 for t in metrics['door_events'] 
-                      if now - t < timedelta(minutes=10))
+        # Get metrics from indexer or fallback to memory
+        indexer_data = get_indexer_metrics()
+        if indexer_data:
+            chat_5m = indexer_data.get('fiveMin', 0)
+            chat_1h = indexer_data.get('hour', 0)
+            door_10m = indexer_data.get('tenMin', 0) // 2  # Estimate
+        else:
+            chat_5m = sum(1 for t in metrics['chat_velocity'] 
+                         if now - t < timedelta(minutes=5))
+            chat_1h = len(metrics['chat_velocity'])
+            door_10m = sum(1 for t in metrics['door_events'] 
+                          if now - t < timedelta(minutes=10))
         
         # Check for PIZZAPOCALYPSE (>10k pizzas breaks reality) — UNLIMITED
         if metrics['pizza_count'] > 10000:
@@ -223,6 +289,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
         data = {
             'chaos_score': round(score, 1),
             'chat_velocity_5min': chat_5m,
+            'chat_velocity_1hour': chat_1h,
             'door_events_10min': door_10m,
             'pizza_count': metrics['pizza_count'],
             'last_updated': metrics['last_updated'],

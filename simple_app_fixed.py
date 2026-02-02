@@ -15,39 +15,6 @@ from collections import deque
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'dongometer.db')
 
-# Matrix indexer count (cached for 60 seconds)
-_indexer_cache = {'count': None, 'timestamp': 0}
-
-def get_indexer_count():
-    """Get total message count from Matrix indexer MongoDB"""
-    global _indexer_cache
-    
-    # Return cached value if recent
-    if _indexer_cache['count'] is not None:
-        if time.time() - _indexer_cache['timestamp'] < 60:
-            return _indexer_cache['count']
-    
-    try:
-        import subprocess
-        # Try mongosh directly (inside doghouse container, mongo is at hostname 'mongo')
-        result = subprocess.run(
-            ['mongosh', '--quiet', 
-             'mongodb://mongo:27017/matrix_index', 
-             '--eval', 'db.events.countDocuments()'],
-            capture_output=True, text=True, timeout=5
-        )
-        
-        if result.returncode == 0:
-            count = int(result.stdout.strip())
-            _indexer_cache['count'] = count
-            _indexer_cache['timestamp'] = time.time()
-            return count
-        return None
-        
-    except Exception:
-        # MongoDB not available
-        return None
-
 metrics = {
     'chat_velocity': deque(maxlen=100),
     'door_events': deque(maxlen=50),
@@ -88,14 +55,14 @@ def calculate_chaos_score():
     except:
         pass
     
-    # APOCALYPSE MODE — ALL LIMITERS REMOVED
+    # Normal calculation
     recent_msgs = sum(1 for t in metrics['chat_velocity'] 
                      if now - t < timedelta(minutes=5))
-    score += recent_msgs * 2  # NO CAP
+    score += min(recent_msgs * 2, 40)
     
     recent_doors = sum(1 for t in metrics['door_events'] 
                       if now - t < timedelta(minutes=10))
-    score += recent_doors * 5  # NO CAP
+    score += min(recent_doors * 5, 30)
     
     hour = now.hour
     if 0 <= hour < 6:
@@ -107,17 +74,10 @@ def calculate_chaos_score():
     else:
         score += 5
     
-    # PIZZA SCALING UNLEASHED — logarithmic growth for infinite chaos
     if metrics['pizza_count'] > 0:
-        # Logarithmic scaling: every 10x pizzas adds +50 chaos
-        import math
-        pizza_bonus = min(metrics['pizza_count'] * 2, 10)  # Base +10
-        if metrics['pizza_count'] > 10000:
-            pizza_bonus += math.log10(metrics['pizza_count']) * 50  # Scaling bonus
-        score += pizza_bonus
+        score += min(metrics['pizza_count'] * 2, 10)
     
-    # NO MAX CAP — CHAOS IS UNLIMITED
-    return score
+    return min(score, 100)
 
 class DongometerHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -129,8 +89,6 @@ class DongometerHandler(BaseHTTPRequestHandler):
         
         if path == '/':
             self.serve_dashboard()
-        elif path == '/manifold':
-            self.serve_manifold()
         elif path == '/api/metrics':
             self.serve_metrics()
         else:
@@ -151,13 +109,6 @@ class DongometerHandler(BaseHTTPRequestHandler):
     
     def serve_dashboard(self):
         html = open('/home/scoob/dongometer/templates/dashboard.html').read() if os.path.exists('/home/scoob/dongometer/templates/dashboard.html') else '<h1>Dongometer</h1>'
-        self.send_response(200)
-        self.send_header('Content-Type', 'text/html')
-        self.end_headers()
-        self.wfile.write(html.encode())
-    
-    def serve_manifold(self):
-        html = open('/home/scoob/dongometer/templates/manifold.html').read() if os.path.exists('/home/scoob/dongometer/templates/manifold.html') else '<h1>Dong Manifold</h1>'
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
@@ -190,11 +141,6 @@ class DongometerHandler(BaseHTTPRequestHandler):
         door_10m = sum(1 for t in metrics['door_events'] 
                       if now - t < timedelta(minutes=10))
         
-        # Check for PIZZAPOCALYPSE (>10k pizzas breaks reality) — UNLIMITED
-        if metrics['pizza_count'] > 10000:
-            score = score * 2.0  # 100% chaos boost, NO CAP
-        
-        # Determine status based on UNLIMITED chaos score
         if status is None:
             if score <= 20:
                 status = '😴 CALM — The donghouse sleeps'
@@ -204,21 +150,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
                 status = '🍕 CHAOTIC — Pizza\'s here'
             elif score <= 80:
                 status = '👿 DEMONIC — Hardin needs a grader'
-            elif score <= 100:
-                status = '☠️ APOCALYPTIC — Gigglesgate 2.0'
-            elif score <= 200:
-                status = '🔥 TRUE APOCALYPSE — The donghouse is no more'
-            elif score <= 500:
-                status = '🌌 COSMIC HORROR — Physics has left the building'
-            elif score <= 1000:
-                status = '💀 MULTIVERSE COLLAPSE — All timelines converge to pizza'
-            elif score < 42069:
-                status = '☠️🍕 HEAT DEATH OF UNIVERSE — Entropy is pizza now 🍕☠️'
             else:
-                status = '🌿 FENTHOUSE — Folding in the infinite 🌿 (Chaos maxed at funny number)'
-        
-        # Get Matrix indexer count if available
-        indexer_count = get_indexer_count()
+                status = '☠️ APOCALYPTIC — Gigglesgate 2.0'
         
         data = {
             'chaos_score': round(score, 1),
@@ -226,8 +159,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
             'door_events_10min': door_10m,
             'pizza_count': metrics['pizza_count'],
             'last_updated': metrics['last_updated'],
-            'status': status,
-            'matrix_indexer_messages': indexer_count
+            'status': status
         }
         self.send_json(data)
     
@@ -240,9 +172,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
         if event_type == 'chat_message':
             metrics['chat_velocity'].append(now)
         elif event_type in ('door_open', 'door_close'):
-            # Honor the value parameter for mass door events
-            for _ in range(min(value, 100000)):  # Cap at 100k per request for safety
-                metrics['door_events'].append(now)
+            metrics['door_events'].append(now)
         elif event_type == 'pizza':
             metrics['pizza_count'] += value
         elif event_type == 'reset_pizza':

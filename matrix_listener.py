@@ -23,7 +23,7 @@ TARGET_ROOM = os.getenv('DONGOMETER_ROOM', '!pYoawuzxaFxYhOVtjN:cclub.cs.wmich.e
 DONGOMETER_URL = os.getenv('DONGOMETER_URL', 'http://localhost:5000/api/event')
 
 # Patterns
-PIZZA_PATTERN = re.compile(r'pizza|🍕', re.IGNORECASE)
+PIZZA_PATTERN = re.compile(r'pizz|🍕', re.IGNORECASE)
 DOOR_PATTERN = re.compile(r'door.*(?:open|unlock|opened)|🚪', re.IGNORECASE)
 CHAOS_KEYWORDS = ['chaos', 'dong', 'apocalyptic', 'gigglesgate', 'hardin needs', 'demonic', 'shadow president']
 
@@ -111,6 +111,13 @@ class MatrixDongometerBot:
         
         # Pizza detection
         pizza_count = len(PIZZA_PATTERN.findall(content_lower))
+        # Apply multiplier if active
+        try:
+            with open("/tmp/dongometer_multiplier", "r") as f:
+                multiplier = int(f.read().strip())
+                pizza_count *= multiplier
+        except:
+            pass
         if pizza_count > 0:
             self.dongometer_request("pizza", pizza_count, f"{sender_name} in {room_name}")
             events.append(f"🍕+{pizza_count}")

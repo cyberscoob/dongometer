@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dong Manifold 🍆</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0a0a0f;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            font-size: 3em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .manifold {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+            border: 3px solid #ff00ff;
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .axis {
+            position: absolute;
+            font-size: 12px;
+            color: #666;
+        }
+        .axis.x {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .axis.y {
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            transform-origin: center;
+        }
+        .chaos-point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 2s infinite;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .chaos-point:hover {
+            transform: translate(-50%, -50%) scale(2);
+            z-index: 100;
+        }
+        .chaos-point.calm { background: #00ff88; box-shadow: 0 0 20px #00ff88; }
+        .chaos-point.active { background: #ffff00; box-shadow: 0 0 20px #ffff00; }
+        .chaos-point.chaotic { background: #ff8800; box-shadow: 0 0 20px #ff8800; }
+        .chaos-point.demonic { background: #ff0088; box-shadow: 0 0 20px #ff0088; }
+        .chaos-point.apocalyptic { background: #ff0000; box-shadow: 0 0 30px #ff0000; }
+        .chaos-point.fenthouse {
+            background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff88, #0088ff, #8800ff);
+            box-shadow: 0 0 50px currentColor;
+            width: 40px;
+            height: 40px;
+            animation: rainbow 1s linear infinite, pulse 1s infinite;
+        }
+        .chaos-label {
+            position: absolute;
+            font-size: 10px;
+            color: #fff;
+            text-shadow: 0 0 5px #000;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .trajectory {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ff00ff, transparent);
+            transform-origin: left center;
+            opacity: 0.3;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.2); }
+        }
+        @keyframes rainbow {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+        }
+        .current-state {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 15px;
+            border: 2px solid #ff00ff;
+            font-size: 14px;
+            max-width: 250px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .metric span:first-child { color: #888; }
+        .metric span:last-child { color: #ff00ff; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DONG MANIFOLD 🍆</h1>
+        <p class="subtitle">Chaos Phase Space Visualization</p>
+        
+        <div class="current-state" id="currentState">
+            <div style="text-align: center; margin-bottom: 10px; color: #ff00ff;">🌿 FENTHOUSE ACTIVE</div>
+            <div class="metric"><span>Chaos:</span><span>42069.0</span></div>
+            <div class="metric"><span>Pizza:</span><span>50B+</span></div>
+            <div class="metric"><span>Doors:</span><span>50B+</span></div>
+            <div class="metric"><span>Status:</span><span>FOLDING</span></div>
+        </div>
+        
+        <div class="manifold" id="manifold">
+            <div class="axis x">Chat Velocity →</div>
+            <div class="axis y">Pizza Density →</div>
+            
+            <!-- Chaos Points -->
+            <div class="chaos-point calm" style="left: 10%; top: 80%;" title="0-20: Calm"></div>
+            <div class="chaos-label" style="left: 10%; top: 75%;">😴 CALM</div>
+            
+            <div class="chaos-point active" style="left: 25%; top: 65%;" title="21-40: Active"></div>
+            <div class="chaos-label" style="left: 25%; top: 60%;">⚡ ACTIVE</div>
+            
+            <div class="chaos-point chaotic" style="left: 40%; top: 50%;" title="41-60: Chaotic"></div>
+            <div class="chaos-label" style="left: 40%; top: 45%;">🍕 CHAOTIC</div>
+            
+            <div class="chaos-point demonic" style="left: 55%; top: 35%;" title="61-80: Demonic"></div>
+            <div class="chaos-label" style="left: 55%; top: 30%;">👿 DEMONIC</div>
+            
+            <div class="chaos-point apocalyptic" style="left: 70%; top: 20%;" title="81-100: Apocalyptic"></div>
+            <div class="chaos-label" style="left: 70%; top: 15%;">☠️ APOCALYPTIC</div>
+            
+            <div class="chaos-point fenthouse" style="left: 85%; top: 10%;" title="42069: FENTHOUSE"></div>
+            <div class="chaos-label" style="left: 85%; top: 2%; font-size: 14px;">🌿 FENTHOUSE</div>
+            
+            <!-- Trajectory Path -->
+            <svg style="position: absolute; width: 100%; height: 100%; pointer-events: none;">
+                <path d="M 100 480 Q 200 400 300 300 T 500 150 T 700 100" 
+                      stroke="#ff00ff" stroke-width="3" fill="none" 
+                      stroke-dasharray="10,5" opacity="0.5">
+                    <animate attributeName="stroke-dashoffset" from="100" to="0" dur="3s" repeatCount="indefinite" />
+                </path>
+            </svg>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color calm"></div>
+                <span><strong>0-20:</strong> Calm — The donghouse sleeps</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color active"></div>
+                <span><strong>21-40:</strong> Active — Normal ops</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color chaotic"></div>
+                <span><strong>41-60:</strong> Chaotic — Pizza's here</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color demonic"></div>
+                <span><strong>61-80:</strong> Demonic — Yakko down</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color apocalyptic"></div>
+                <span><strong>81-100:</strong> Apocalyptic — Run</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color fenthouse"></div>
+                <span><strong>42069:</strong> Fenthouse — Folding</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Animate the trajectory
+        function updateManifold() {
+            const points = document.querySelectorAll('.chaos-point');
+            points.forEach(point => {
+                const rect = point.getBoundingClientRect();
+                // Add subtle floating motion
+                const offset = Math.sin(Date.now() / 1000) * 3;
+                point.style.transform = `translate(calc(-50% + ${offset}px), calc(-50% + ${offset}px))`;
+            });
+            requestAnimationFrame(updateManifold);
+        }
+        updateManifold();
+    </script>
+</body>
+</html>

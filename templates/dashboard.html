@@ -142,6 +142,42 @@
         .chaotic { color: #ff8800; }
         .demonic { color: #ff0088; }
         .apocalyptic { color: #ff0000; }
+        .fenthouse { 
+            /* Green weed background for Fenthouse */
+            background: linear-gradient(135deg, #1a4d1a 0%, #0d330d 50%, #1a4d1a 100%) !important;
+            background-color: #1a4d1a !important;
+        }
+        
+        .fenthouse .chaos-score {
+            /* Rainbow chaos number - solid colors */
+            color: #ff00ff;
+            text-shadow: 
+                2px 0 #ff0000,
+                -2px 0 #00ff00,
+                0 2px #0088ff,
+                0 -2px #ffff00;
+            animation: rainbow-text 2s linear infinite;
+        }
+        
+        @keyframes rainbow-text {
+            0% { color: #ff0000; }
+            20% { color: #ff8800; }
+            40% { color: #ffff00; }
+            60% { color: #00ff88; }
+            80% { color: #0088ff; }
+            100% { color: #ff0000; }
+        }
+        
+        .fenthouse .chaos-status {
+            /* White/clean status text on green */
+            color: #fff;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        
+        @keyframes rainbow {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
         
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -151,7 +187,62 @@
         .updating {
             animation: pulse 0.5s ease-in-out;
         }
-    </style>
+    
+        /* Enhanced Animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px currentColor; }
+            50% { box-shadow: 0 0 40px currentColor, 0 0 60px currentColor; }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        @keyframes particle {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+        }
+        
+        .chaos-score {
+            animation: float 3s ease-in-out infinite, glow 2s ease-in-out infinite;
+        }
+        
+        .chaotic .chaos-score {
+            animation: float 2s ease-in-out infinite, glow 1s ease-in-out infinite, shake 0.5s ease-in-out infinite;
+        }
+        
+        .demonic .chaos-score {
+            animation: float 1s ease-in-out infinite, glow 0.5s ease-in-out infinite, shake 0.2s ease-in-out infinite;
+        }
+        
+        .metric-value {
+            transition: all 0.3s ease;
+        }
+        
+        .metric-value.updating {
+            transform: scale(1.2);
+            text-shadow: 0 0 20px currentColor;
+        }
+        
+        .metric-card:hover {
+            animation: glow 1s ease-in-out infinite;
+        }
+        
+        .legend-item {
+            transition: all 0.3s ease;
+        }
+        
+        .legend-item:hover {
+            transform: translateX(10px);
+        }
+</style>
 </head>
 <body>
     <div class="header">
@@ -189,6 +280,12 @@
             <div class="metric-value" id="chat1hour">0</div>
             <div class="metric-label">Messages (1 hour)</div>
         </div>
+        
+        <div class="metric-card">
+            <div class="metric-icon">🗄️</div>
+            <div class="metric-value" id="indexerCount">-</div>
+            <div class="metric-label">Matrix Indexed Events</div>
+        </div>
     </div>
     
     <div class="legend">
@@ -213,6 +310,10 @@
             <div class="legend-color apocalyptic" style="background: #ff0000;"></div>
             <span><strong>81-100:</strong> Apocalyptic — Gigglesgate 2.0, run</span>
         </div>
+        <div class="legend-item">
+            <div class="legend-color fenthouse" style="background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff88, #0088ff, #8800ff);"></div>
+            <span><strong>42069+:</strong> 🌿 Fenthouse — Folding in the Fenthouse</span>
+        </div>
     </div>
     
     <div class="last-updated" id="lastUpdated">Last updated: Never</div>
@@ -221,6 +322,7 @@
         let lastData = null;
         
         function getChaosClass(score) {
+            if (score >= 42069) return 'fenthouse';
             if (score <= 20) return 'calm';
             if (score <= 40) return 'active';
             if (score <= 60) return 'chaotic';
@@ -229,6 +331,7 @@
         }
         
         function getChaosLabel(score) {
+            if (score >= 42069) return '🌿 Fenthouse — Folding in the Fenthouse';
             if (score <= 20) return '😴 CALM — The donghouse sleeps';
             if (score <= 40) return '⚡ ACTIVE — Normal operations';
             if (score <= 60) return '🍕 CHAOTIC — Pizza\'s here';
@@ -251,25 +354,45 @@
                     setTimeout(() => scoreEl.classList.remove('updating'), 500);
                 }
                 
+                // Apply chaos class to body for global effects
+                const chaosClass = getChaosClass(newScore);
+                document.body.className = chaosClass;
+                
                 scoreEl.textContent = newScore.toFixed(1);
-                scoreEl.className = 'chaos-score ' + getChaosClass(newScore);
+                scoreEl.className = 'chaos-score ' + chaosClass;
                 
                 // Update status
                 const statusEl = document.getElementById('chaosStatus');
-                statusEl.textContent = getChaosLabel(newScore);
-                statusEl.className = 'chaos-status ' + getChaosClass(newScore);
+                statusEl.textContent = data.status || getChaosLabel(newScore);
+                statusEl.className = 'chaos-status ' + chaosClass;
                 
-                // Update metrics
-                document.getElementById('chat5min').textContent = data.chat_velocity_5min;
-                document.getElementById('door10min').textContent = data.door_events_10min;
-                document.getElementById('pizzaCount').textContent = data.pizza_count;
-                document.getElementById('chat1hour').textContent = data.chat_velocity_1hour;
+                // Update metrics with animation
+                const metricsIds = ['chat5min', 'door10min', 'pizzaCount', 'chat1hour'];
+                const metricData = [data.chat_velocity_5min, data.door_events_10min, data.pizza_count, data.chat_velocity_1hour];
+                
+                metricsIds.forEach((id, index) => {
+                    const el = document.getElementById(id);
+                    const oldVal = parseInt(el.textContent);
+                    const newVal = metricData[index] || 0;
+                    
+                    if (oldVal !== newVal) {
+                        el.classList.add('updating');
+                        setTimeout(() => el.classList.remove('updating'), 300);
+                    }
+                    el.textContent = newVal;
+                });
                 
                 // Update timestamp
                 if (data.last_updated) {
                     const date = new Date(data.last_updated);
                     document.getElementById('lastUpdated').textContent = 
                         'Last updated: ' + date.toLocaleString();
+                }
+                
+                // Update Matrix indexer count if available
+                if (data.matrix_indexer_messages !== null && data.matrix_indexer_messages !== undefined) {
+                    const indexerEl = document.getElementById('indexerCount');
+                    indexerEl.textContent = data.matrix_indexer_messages.toLocaleString();
                 }
                 
                 lastData = data;

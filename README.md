@@ -20,6 +20,7 @@ Real-time chaos metrics dashboard for the CClub donghouse.
 | 41-60 | 🍕 Chaotic | Pizza's here, someone's compiling |
 | 61-80 | 👿 Demonic | Hardin needs a grader, Yakko is down |
 | 81-100 | ☠️ Apocalyptic | Gigglesgate 2.0, run |
+| **42069+** | 🌿 **Fenthouse** | *Folding in the Fenthouse* — Maximum chaos, admin override, rainbow mode |
 
 ## Installation
 

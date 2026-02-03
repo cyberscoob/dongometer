@@ -153,8 +153,18 @@
 <body>
     <a href="/" class="nav-link">⬅ Dashboard</a>
 
+    <!-- START BUTTON FOR AUTOPLAY -->
+    <div id="start-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer;">
+        <div style="font-size: 48px; color: #0f0; font-weight: bold; text-align: center; animation: rainbow 2s infinite;">
+            🌿 CLICK TO ENTER FENTHOUSE 🌿
+        </div>
+        <div style="font-size: 24px; color: #666; margin-top: 20px;">
+            (Required to start video)
+        </div>
+    </div>
+
     <!-- PSYCHEDELIC VIDEO BACKGROUND -->
-    <div id="video-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden;">
+    <div id="video-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; display: none;">
         <div id="youtube-player" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 120vw; height: 120vh; filter: contrast(1.5) saturate(2) hue-rotate(0deg) blur(2px); animation: video-fx 5s infinite;"></div>
     </div>
 
@@ -468,12 +478,6 @@
                         `🔒 ${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`;
                 }
                 
-                // LOAD MOVIE WHEN FENTHOUSE ACTIVATES
-                if (fenthouseActive && !wasActive && !ytPlayer) {
-                    console.log('🌿 FENTHOUSE ACTIVATED! Loading random B-movie...');
-                    loadRandomMovie();
-                }
-                
                 // SYNC MOVIE WITH FENTHOUSE TIMER
                 if (fenthouseActive && ytPlayer) {
                     syncMovieWithFenthouse();
@@ -482,6 +486,14 @@
                 console.error('Fetch error:', e);
             }
         }
+        
+        // START SCREEN CLICK HANDLER
+        document.getElementById('start-screen').addEventListener('click', function() {
+            console.log('🌿 ENTERING FENTHOUSE - starting video...');
+            this.style.display = 'none';
+            document.getElementById('video-container').style.display = 'block';
+            loadRandomMovie();
+        });
 
         // GLITCH EFFECT
         function glitch() {
@@ -563,15 +575,15 @@
         }
 
         // ========== YOUTUBE VIDEO BACKGROUND ==========
-        // Reliable public domain movies (verified working IDs)
+        // Public domain movies - using direct embed approach
         const MOVIES = [
-            { id: 'lZ2p-1d-L40', title: 'Night of the Living Dead', duration: 5760 }, // 96 min
-            { id: 'H8ZxO8L8-00', title: 'Plan 9 from Outer Space', duration: 4740 },  // 79 min
-            { id: 's8ZxO8L8-00', title: 'House on Haunted Hill', duration: 4140 },    // 69 min
-            { id: 'uJSCJPnZ1mI', title: 'Carnival of Souls', duration: 4740 },       // 79 min
-            { id: 'nN2y8mMXn00', title: 'The Last Man on Earth', duration: 5160 },   // 86 min
-            { id: 'kDKdhfJ5-00', title: 'The Brain That Wouldnt Die', duration: 4920 }, // 82 min
-            { id: 'X8ZxO8L8-00', title: 'Santa Claus Conquers Martians', duration: 6660 }, // 111 min
+            { id: 'd9SG8fbn7AI', title: 'Night of the Living Dead (1968)', duration: 5760 },
+            { id: 'Q8FBG9q6qO4', title: 'Plan 9 from Outer Space (1957)', duration: 4740 },
+            { id: 'T3HJ9d3p2hY', title: 'House on Haunted Hill (1959)', duration: 4140 },
+            { id: 'M0_0ZOFz3rE', title: 'Carnival of Souls (1962)', duration: 4740 },
+            { id: 'rkdT9f-4g54', title: 'The Last Man on Earth (1964)', duration: 5160 },
+            { id: '8LxXGhK2vZ0', title: 'The Brain That Wouldnt Die (1962)', duration: 4920 },
+            { id: '5sY6N3YQ7S4', title: 'Santa Claus Conquers the Martians (1964)', duration: 6660 },
         ];
 
         let ytPlayer = null;
@@ -626,7 +638,7 @@
                         event.target.playVideo();
                         movieStartTime = Date.now();
                         console.log('✅ Playing:', movie.title);
-                        
+
                         // Update status with current movie
                         const statusEl = document.getElementById('countdown');
                         if (statusEl) {
@@ -657,16 +669,16 @@
 
         function syncMovieWithFenthouse() {
             if (!ytPlayer || !fenthouseExpiry || !movieStartTime) return;
-            
+
             const now = Date.now();
             const fentRemaining = fenthouseExpiry - now;
             const movieDuration = MOVIES[currentMovieIndex].duration * 1000;
             const movieElapsed = now - movieStartTime;
             const movieProgress = movieElapsed % movieDuration;
-            
+
             // If Fenthouse is about to expire, don't restart
             if (fentRemaining < 10000) return; // Less than 10 seconds left
-            
+
             // Sync: restart movie when Fenthouse has 1 hour left, 30 min left, etc
             const syncPoints = [3600000, 1800000, 600000, 300000, 60000]; // 1hr, 30min, 10min, 5min, 1min
             for (const point of syncPoints) {
@@ -691,7 +703,9 @@
         checkFenthouse();
         animate();
         setInterval(checkFenthouse, 5000); // Check Fenthouse status every 5s
-        setInterval(syncMovieWithFenthouse, 10000); // Sync movie loop every 10s
+        setInterval(() => {
+            if (ytPlayer) syncMovieWithFenthouse();
+        }, 10000); // Sync movie loop every 10s (only if player exists)
     </script>
 </body>
 </html>

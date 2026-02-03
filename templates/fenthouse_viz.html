@@ -467,21 +467,67 @@
             }
         }
         
-        // DVD BOUNCER TIMER - bounces around like old DVD screensaver
+        // DVD BOUNCER TIMER - smooth local countdown with spin animation
         class DVDBouncer {
             constructor() {
                 this.el = document.getElementById('dvd-timer');
                 this.x = Math.random() * (window.innerWidth - 200);
                 this.y = Math.random() * (window.innerHeight - 100);
-                this.vx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
-                this.vy = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+                this.vx = (Math.random() > 0.5 ? 1 : -1) * 2;
+                this.vy = (Math.random() > 0.5 ? 1 : -1) * 2;
                 this.hue = 0;
                 this.visible = false;
+                
+                // Time tracking
+                this.totalMs = 0;
+                this.lastFrame = performance.now();
+                this.spinStart = 0;
+                this.isSpinning = false;
+                this.spinTriggerTime = 10000; // Spin every 10 seconds
+                this.lastSpinTrigger = 0;
+            }
+            
+            setTimeFromServer(hours, minutes, seconds) {
+                // Sync with server but keep local precision
+                const newTotalMs = ((hours * 3600) + (minutes * 60) + seconds) * 1000;
+                // Only update if significant drift (>1s)
+                if (Math.abs(newTotalMs - this.totalMs) > 1000) {
+                    this.totalMs = newTotalMs;
+                }
             }
             
             update() {
                 if (!this.visible) return;
                 
+                // Decrement time locally for smooth countdown
+                const now = performance.now();
+                const delta = now - this.lastFrame;
+                this.lastFrame = now;
+                
+                if (this.totalMs > 0) {
+                    this.totalMs = Math.max(0, this.totalMs - delta);
+                }
+                
+                // Trigger spin every ~10 seconds
+                const secondsElapsed = (now - this.lastSpinTrigger) / 1000;
+                if (secondsElapsed >= 10 && !this.isSpinning) {
+                    this.triggerSpin();
+                }
+                
+                // Handle spin animation
+                let rotation = 0;
+                if (this.isSpinning) {
+                    const spinElapsed = (now - this.spinStart) / 1000;
+                    if (spinElapsed < 2) {
+                        // Spin like a top for 2 seconds
+                        rotation = spinElapsed * 1800; // 5 full rotations (1800 degrees)
+                    } else {
+                        this.isSpinning = false;
+                        this.lastSpinTrigger = now;
+                    }
+                }
+                
+                // Bounce movement
                 this.x += this.vx;
                 this.y += this.vy;
                 
@@ -492,7 +538,7 @@
                 if (this.x <= 0 || this.x >= w) {
                     this.vx *= -1;
                     this.x = Math.max(0, Math.min(this.x, w));
-                    this.hue = (this.hue + 60) % 360; // Change color on bounce
+                    this.hue = (this.hue + 60) % 360;
                     this.el.style.borderColor = `hsl(${this.hue}, 100%, 50%)`;
                     this.el.style.boxShadow = `0 0 30px hsla(${this.hue}, 100%, 50%, 0.5)`;
                     this.el.style.color = `hsl(${this.hue}, 100%, 70%)`;
@@ -506,18 +552,29 @@
                     this.el.style.color = `hsl(${this.hue}, 100%, 70%)`;
                 }
                 
+                // Update display with milliseconds
+                const hours = Math.floor(this.totalMs / 3600000);
+                const minutes = Math.floor((this.totalMs % 3600000) / 60000);
+                const seconds = Math.floor((this.totalMs % 60000) / 1000);
+                const ms = Math.floor((this.totalMs % 1000) / 10);
+                
+                this.el.textContent = `🔒 ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}.${String(ms).padStart(2,'0')}`;
+                
                 this.el.style.left = this.x + 'px';
                 this.el.style.top = this.y + 'px';
-                this.el.style.transform = 'none';
+                this.el.style.transform = rotation ? `rotate(${rotation}deg)` : 'none';
             }
             
-            setTime(hours, minutes, seconds) {
-                this.el.textContent = `🔒 ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+            triggerSpin() {
+                this.isSpinning = true;
+                this.spinStart = performance.now();
             }
             
             show() {
                 this.visible = true;
                 this.el.style.display = 'block';
+                this.lastFrame = performance.now();
+                this.lastSpinTrigger = performance.now();
             }
             
             hide() {
@@ -552,8 +609,8 @@
                     const c = data.fenthouse_countdown;
                     document.getElementById('countdown').textContent = 
                         `🔒 ${c.hours}h ${c.minutes}m ${c.seconds}s`;
-                    dvdBouncer.setTime(c.hours, c.minutes, c.seconds);
-                    dvdBouncer.show();
+                    dvdBouncer.setTimeFromServer(c.hours, c.minutes, c.seconds);
+                    if (!dvdBouncer.visible) dvdBouncer.show();
                 }
             } catch (e) {}
         }

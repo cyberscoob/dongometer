@@ -17,15 +17,28 @@
             left: 0;
             width: 100%;
             height: 100%;
+            z-index: 10;
+            mix-blend-mode: screen; /* ADDITIVE BLEND with video below */
+            pointer-events: none;
         }
-        #video-container {
+        #video-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            object-fit: cover;
+            display: none;
+        }
+        #base-layer {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             z-index: -1;
-            display: none;
+            background: #000;
         }
         #start-screen {
             position: fixed;
@@ -117,8 +130,11 @@
 </head>
 <body>
     <button class="quality-toggle" onclick="toggleQuality()" id="qualityBtn">QUALITY: HIGH</button>
+    
+    <!-- Layer stack: Base -> Video -> Canvas (additive) -->
+    <div id="base-layer"></div>
+    <video id="video-bg" autoplay muted loop playsinline></video>
     <canvas id="canvas"></canvas>
-    <div id="video-container"></div>
 
     <div id="start-screen">
         <div class="fenthouse-text">🌿 CLICK TO ENTER FENTHOUSE 🌿</div>
@@ -194,11 +210,15 @@
                 if (this.life <= 0) this.reset();
             }
             draw() {
-                ctx.globalAlpha = this.life * 0.8;
-                ctx.fillStyle = `hsl(${this.hue}, 100%, 60%)`;
+                ctx.globalAlpha = this.life * 0.9;
+                ctx.fillStyle = `hsl(${this.hue}, 100%, 70%)`;
+                // Glow effect
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.shadowBlur = 0;
             }
         }
 
@@ -226,8 +246,10 @@
                 ctx.save();
                 ctx.translate(this.x, this.y);
                 ctx.rotate(this.angle);
-                ctx.strokeStyle = `hsla(${this.hue}, 100%, 60%, 0.3)`;
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 70%, 0.5)`;
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
                 ctx.beginPath();
                 const arms = qualityMode === 'low' ? 3 : 4;
                 for (let arm = 0; arm < arms; arm++) {
@@ -256,7 +278,7 @@
         }
         initParticles();
 
-        // OPTIMIZED ANIMATION LOOP
+        // OPTIMIZED ANIMATION LOOP with ADDITIVE blending
         function animate(now) {
             requestAnimationFrame(animate);
             
@@ -269,9 +291,13 @@
             time += 0.033;
 
             if (fenthouseActive) {
-                // Fast fade
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                // Clear with black but very transparent for fade trails
+                // With mix-blend-mode: screen, black is invisible and video shows through
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
                 ctx.fillRect(0, 0, width, height);
+
+                // Set composite for additive glow
+                ctx.globalCompositeOperation = 'screen';
 
                 // Draw spirals
                 spirals.forEach(s => { s.update(); s.draw(); });
@@ -279,9 +305,12 @@
                 // Draw particles
                 particles.forEach(p => { p.update(); p.draw(); });
 
-                // Occasional flash
+                // Reset composite for flash overlay
+                ctx.globalCompositeOperation = 'source-over';
+
+                // Occasional full-screen flash
                 if (Math.random() < 0.03) {
-                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.2)`;
+                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.15)`;
                     ctx.fillRect(0, 0, width, height);
                 }
 
@@ -357,26 +386,24 @@
             triedMovies.add(index);
             const movie = MOVIES[index];
             
-            let videoEl = document.getElementById('fenthouse-video');
-            if (!videoEl) {
-                videoEl = document.createElement('video');
-                videoEl.id = 'fenthouse-video';
-                videoEl.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1;filter:contrast(120%) saturate(150%)';
-                videoEl.autoplay = true;
-                videoEl.loop = true;
-                videoEl.muted = true;
-                document.body.insertBefore(videoEl, document.body.firstChild);
-            }
+            const videoEl = document.getElementById('video-bg');
+            videoEl.style.display = 'block';
             videoEl.src = movie.url;
+            
             videoEl.play().then(() => {
                 movieStartTime = Date.now();
                 videoPlayer = videoEl;
+                console.log('✅ Playing:', movie.title);
                 const statusEl = document.getElementById('countdown');
                 if (statusEl) statusEl.innerHTML = `🔒 FENTHOUSE | 🎬 ${movie.title}`;
-            }).catch(() => {
+            }).catch((e) => {
+                console.error('❌ Playback failed:', e);
                 setTimeout(() => loadMovie(getNextMovie()), 1000);
             });
-            videoEl.onerror = () => setTimeout(() => loadMovie(getNextMovie()), 1000);
+            videoEl.onerror = () => {
+                console.error('❌ Video error, trying next...');
+                setTimeout(() => loadMovie(getNextMovie()), 1000);
+            };
         }
 
         function loadRandomMovie() {

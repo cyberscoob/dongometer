@@ -15,6 +15,7 @@
             width: 100%; height: 100%;
             z-index: 0;
             object-fit: cover;
+            background: #000;
         }
         
         /* Layer 1: Psychedelic canvas on top */
@@ -214,20 +215,19 @@
             lastFrame = now;
             time += 0.033;
             
-            if (fenthouseActive) {
-                // Soft fade for trails
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            // Always run psychedelic effects (video shows through via screen blend)
+            // Soft fade for trails - black is transparent with screen blend
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw effects
+            spirals.forEach(s => { s.update(); s.draw(); });
+            particles.forEach(p => { p.update(); p.draw(); });
+            
+            // Flash
+            if (Math.random() < 0.02) {
+                ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.15)`;
                 ctx.fillRect(0, 0, width, height);
-                
-                // Draw effects
-                spirals.forEach(s => { s.update(); s.draw(); });
-                particles.forEach(p => { p.update(); p.draw(); });
-                
-                // Flash
-                if (Math.random() < 0.02) {
-                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.15)`;
-                    ctx.fillRect(0, 0, width, height);
-                }
             }
         }
         animate(0);
@@ -244,15 +244,30 @@
         }
         loadMovies();
         
-        function playMovie(idx) {
-            if (!MOVIES.length || idx >= MOVIES.length) return;
+        async function playMovie(idx) {
+            // Wait for movies to load if not ready
+            if (!MOVIES.length) {
+                await loadMovies();
+            }
+            if (!MOVIES.length) {
+                console.log('No movies available');
+                return;
+            }
+            if (idx >= MOVIES.length) idx = 0;
+            
             currentMovie = MOVIES[idx];
             const video = document.getElementById('movie-layer');
             video.src = currentMovie.url;
-            video.play().then(() => {
+            
+            try {
+                await video.play();
                 document.getElementById('movie-info').style.display = 'block';
                 document.getElementById('movie-info').textContent = `🎬 ${currentMovie.title}`;
-            }).catch(() => setTimeout(() => playMovie((idx + 1) % MOVIES.length), 1000));
+                console.log('Playing:', currentMovie.title);
+            } catch (e) {
+                console.log('Playback failed, trying next movie...');
+                setTimeout(() => playMovie((idx + 1) % MOVIES.length), 500);
+            }
         }
         
         // Check Fenthouse status
@@ -279,9 +294,11 @@
         setInterval(check, 5000);
         
         // Start on click
-        document.getElementById('start-screen').addEventListener('click', function() {
+        document.getElementById('start-screen').addEventListener('click', async function() {
             this.style.display = 'none';
-            playMovie(Math.floor(Math.random() * MOVIES.length));
+            // Start with random movie
+            const randomIdx = Math.floor(Math.random() * Math.max(1, MOVIES.length || 64));
+            await playMovie(randomIdx);
         });
     </script>
 </body>

@@ -18,6 +18,38 @@
             width: 100%;
             height: 100%;
         }
+        #video-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            display: none;
+        }
+        #start-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a0f0a 0%, #0f1a0f 50%, #0a0f1a 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            cursor: pointer;
+        }
+        .fenthouse-text {
+            font-size: 80px;
+            font-weight: bold;
+            text-transform: uppercase;
+            animation: rainbow 0.5s linear infinite, shake 0.1s ease-in-out infinite;
+            text-shadow: -5px 0 #ff0000, 5px 0 #00ffff, 0 0 30px currentColor;
+            letter-spacing: 15px;
+            pointer-events: none;
+        }
         .overlay {
             position: absolute;
             top: 50%;
@@ -27,32 +59,12 @@
             pointer-events: none;
             z-index: 10;
         }
-        .fenthouse-text {
-            font-size: 80px;
-            font-weight: bold;
-            text-transform: uppercase;
-            animation: rainbow 0.5s linear infinite, shake 0.1s ease-in-out infinite, rgb-split 0.2s linear infinite;
-            text-shadow:
-                -5px 0 #ff0000,
-                5px 0 #00ffff,
-                0 0 30px currentColor,
-                0 0 60px currentColor,
-                0 0 90px currentColor;
-            letter-spacing: 15px;
-            filter: contrast(200%) brightness(120%);
-        }
         .chaos-number {
             font-size: 140px;
             font-weight: bold;
             margin-top: 20px;
-            animation: rainbow 0.7s linear infinite, hyper-pulse 0.3s ease-in-out infinite, glitch-text 0.15s infinite;
-            text-shadow:
-                -8px 0 #ff0000,
-                8px 0 #00ffff,
-                0 0 50px currentColor,
-                0 0 100px currentColor,
-                0 0 150px currentColor;
-            filter: contrast(200%) brightness(150%);
+            animation: rainbow 0.7s linear infinite, hyper-pulse 0.3s ease-in-out infinite;
+            text-shadow: -8px 0 #ff0000, 8px 0 #00ffff, 0 0 50px currentColor;
         }
         .status-bar {
             position: absolute;
@@ -67,139 +79,58 @@
             font-size: 18px;
             animation: rainbow-border 2s linear infinite;
         }
-        @keyframes rainbow {
-            0% { color: #ff0000; }
-            16% { color: #ff8800; }
-            33% { color: #ffff00; }
-            50% { color: #00ff00; }
-            66% { color: #0088ff; }
-            83% { color: #8800ff; }
-            100% { color: #ff0000; }
-        }
-        @keyframes rainbow-border {
-            0% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
-            16% { border-color: #ff8800; box-shadow: 0 0 20px #ff8800; }
-            33% { border-color: #ffff00; box-shadow: 0 0 20px #ffff00; }
-            50% { border-color: #00ff00; box-shadow: 0 0 20px #00ff00; }
-            66% { border-color: #0088ff; box-shadow: 0 0 20px #0088ff; }
-            83% { border-color: #8800ff; box-shadow: 0 0 20px #8800ff; }
-            100% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
-        }
-        @keyframes shake {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); }
-            10% { transform: translate(-8px, 5px) rotate(-3deg); }
-            20% { transform: translate(8px, -5px) rotate(3deg); }
-            30% { transform: translate(-5px, 8px) rotate(-2deg); }
-            40% { transform: translate(5px, -8px) rotate(2deg); }
-            50% { transform: translate(-10px, 0) rotate(-4deg); }
-            60% { transform: translate(10px, 5px) rotate(4deg); }
-            70% { transform: translate(-5px, -10px) rotate(-2deg); }
-            80% { transform: translate(5px, 10px) rotate(2deg); }
-            90% { transform: translate(-3px, 3px) rotate(-1deg); }
-        }
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-        @keyframes hyper-pulse {
-            0%, 100% { transform: scale(1) skew(0deg); filter: hue-rotate(0deg); }
-            25% { transform: scale(1.3) skew(5deg, -3deg); filter: hue-rotate(90deg); }
-            50% { transform: scale(1.5) skew(-5deg, 3deg); filter: hue-rotate(180deg); }
-            75% { transform: scale(1.2) skew(3deg, 5deg); filter: hue-rotate(270deg); }
-        }
-        @keyframes rgb-split {
-            0%, 100% { text-shadow: -5px 0 #ff0000, 5px 0 #00ffff; }
-            33% { text-shadow: -10px 0 #00ff00, 10px 0 #ff00ff; }
-            66% { text-shadow: -8px 0 #0000ff, 8px 0 #ffff00; }
-        }
-        @keyframes glitch-text {
-            0%, 90%, 100% { opacity: 1; }
-            91% { opacity: 0.8; transform: translateX(10px); }
-            92% { opacity: 0.6; transform: translateX(-10px); }
-            93% { opacity: 0.4; transform: translateX(5px); }
-            94% { opacity: 1; transform: translateX(0); }
-            96% { opacity: 0.5; transform: scale(1.1); }
-            97% { opacity: 1; transform: scale(1); }
-        }
-        .nav-link {
+        .quality-toggle {
             position: absolute;
             top: 20px;
             left: 20px;
-            padding: 10px 20px;
-            background: #0f0;
-            color: #000;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            pointer-events: auto;
             z-index: 100;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #0f0;
+            color: #0f0;
+            padding: 10px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        @keyframes rainbow {
+            0% { color: #ff0000; } 16% { color: #ff8800; } 33% { color: #ffff00; }
+            50% { color: #00ff00; } 66% { color: #0088ff; } 83% { color: #8800ff; } 100% { color: #ff0000; }
+        }
+        @keyframes rainbow-border {
+            0% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; } 16% { border-color: #ff8800; box-shadow: 0 0 20px #ff8800; }
+            33% { border-color: #ffff00; box-shadow: 0 0 20px #ffff00; } 50% { border-color: #00ff00; box-shadow: 0 0 20px #00ff00; }
+            66% { border-color: #0088ff; box-shadow: 0 0 20px #0088ff; } 83% { border-color: #8800ff; box-shadow: 0 0 20px #8800ff; }
+            100% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); } 25% { transform: translate(-4px, 2px) rotate(-2deg); }
+            50% { transform: translate(4px, -2px) rotate(2deg); } 75% { transform: translate(-2px, 4px) rotate(-1deg); }
+        }
+        @keyframes hyper-pulse {
+            0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.1); filter: brightness(1.3); }
         }
         .inactive-message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: #666;
-            font-size: 24px;
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: #666; font-size: 24px; display: none; z-index: 50;
         }
-        .inactive-message .big {
-            font-size: 48px;
-            color: #333;
-            margin-bottom: 20px;
-        }
+        .inactive-message .big { font-size: 120px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
-    <a href="/" class="nav-link">⬅ Dashboard</a>
+    <button class="quality-toggle" onclick="toggleQuality()" id="qualityBtn">QUALITY: HIGH</button>
+    <canvas id="canvas"></canvas>
+    <div id="video-container"></div>
 
-    <!-- START BUTTON FOR AUTOPLAY -->
-    <div id="start-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 100; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer;">
-        <div style="font-size: 48px; color: #0f0; font-weight: bold; text-align: center; animation: rainbow 2s infinite;">
-            🌿 CLICK TO ENTER FENTHOUSE 🌿
-        </div>
-        <div style="font-size: 24px; color: #666; margin-top: 20px;">
-            (Required to start video)
-        </div>
+    <div id="start-screen">
+        <div class="fenthouse-text">🌿 CLICK TO ENTER FENTHOUSE 🌿</div>
+        <div id="countdown" style="color: #0f0; font-size: 24px; margin-top: 20px;"></div>
     </div>
 
-    <!-- PSYCHEDELIC VIDEO BACKGROUND -->
-    <div id="video-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden; display: none;">
-        <div id="youtube-player" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 120vw; height: 120vh; filter: contrast(1.5) saturate(2) hue-rotate(0deg) blur(2px); animation: video-fx 5s infinite;"></div>
+    <div class="overlay" id="activeOverlay">
+        <div class="fenthouse-text" id="fenthouseStatus">🌿 FENTHOUSE MODE 🌿</div>
+        <div class="chaos-number" id="chaosDisplay">42069</div>
     </div>
 
-    <!-- Chaos overlay canvas -->
-    <canvas id="canvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; mix-blend-mode: screen;"></canvas>
-
-    <style>
-        @keyframes video-fx {
-            0% { filter: contrast(1.5) saturate(2) hue-rotate(0deg) blur(2px); transform: translate(-50%, -50%) scale(1); }
-            25% { filter: contrast(2) saturate(3) hue-rotate(90deg) blur(1px); transform: translate(-50%, -50%) scale(1.1); }
-            50% { filter: contrast(1.8) saturate(2.5) hue-rotate(180deg) blur(3px); transform: translate(-50%, -50%) scale(1.05); }
-            75% { filter: contrast(2.2) saturate(3.5) hue-rotate(270deg) blur(1px); transform: translate(-50%, -50%) scale(1.15); }
-            100% { filter: contrast(1.5) saturate(2) hue-rotate(360deg) blur(2px); transform: translate(-50%, -50%) scale(1); }
-        }
-        #video-container::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px);
-            pointer-events: none;
-            animation: scanlines 0.1s infinite;
-        }
-        @keyframes scanlines {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(4px); }
-        }
-    </style>
-
-    <div id="activeOverlay" class="overlay" style="display: none;">
-        <div class="fenthouse-text">🌿 FENTHOUSE 🌿</div>
-        <div class="chaos-number">42069</div>
-        <div class="status-bar" id="countdown">LOCKED IN</div>
-    </div>
-
-    <div id="inactiveOverlay" class="inactive-message" style="display: none;">
+    <div id="inactiveOverlay" class="inactive-message">
         <div class="big">🔒</div>
         <div>FENTHOUSE MODE INACTIVE</div>
         <div style="font-size: 16px; margin-top: 10px;">Chaos must reach 42069 to unlock</div>
@@ -214,258 +145,166 @@
         let particles = [];
         let spirals = [];
         let countdown = null;
+        let qualityMode = 'high';
+        let frameSkip = 0;
+        let lastFrame = 0;
 
         function resize() {
-            width = canvas.width = window.innerWidth;
-            height = canvas.height = window.innerHeight;
+            // Use lower resolution for performance
+            const scale = qualityMode === 'low' ? 0.5 : (qualityMode === 'medium' ? 0.75 : 1);
+            width = canvas.width = window.innerWidth * scale;
+            height = canvas.height = window.innerHeight * scale;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
         }
         resize();
-        window.addEventListener('resize', resize);
+        window.addEventListener('resize', () => { resize(); initParticles(); });
 
-        // HYPER-PARTICLE - faster, crazier, more chaotic
+        function toggleQuality() {
+            qualityMode = qualityMode === 'high' ? 'medium' : (qualityMode === 'medium' ? 'low' : 'high');
+            document.getElementById('qualityBtn').textContent = `QUALITY: ${qualityMode.toUpperCase()}`;
+            resize();
+            initParticles();
+        }
+
+        // OPTIMIZED PARTICLES - fewer, simpler, faster
         class PsyParticle {
             constructor() {
                 this.reset();
             }
-
             reset() {
                 this.x = Math.random() * width;
                 this.y = Math.random() * height;
-                this.size = Math.random() * 15 + 5;
-                this.speedX = (Math.random() - 0.5) * 15;
-                this.speedY = (Math.random() - 0.5) * 15;
+                this.size = Math.random() * 8 + 4;
+                this.speedX = (Math.random() - 0.5) * 8;
+                this.speedY = (Math.random() - 0.5) * 8;
                 this.hue = Math.random() * 360;
                 this.life = 1;
-                this.decay = Math.random() * 0.02 + 0.01;
-                this.pulse = Math.random() * Math.PI;
+                this.decay = Math.random() * 0.015 + 0.008;
             }
-
             update() {
-                // CHAOTIC MOVEMENT
-                this.x += this.speedX + Math.sin(time * 5 + this.pulse) * 3;
-                this.y += this.speedY + Math.cos(time * 7 + this.pulse) * 3;
-                this.hue += 15; // FAST COLOR CYCLING
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.hue += 8;
                 this.life -= this.decay;
-                this.pulse += 0.2;
-
-                // GLITCH TELEPORT
-                if (Math.random() < 0.01) {
-                    this.x = Math.random() * width;
-                    this.y = Math.random() * height;
-                }
-
-                // Wrap around screen
                 if (this.x < 0) this.x = width;
                 if (this.x > width) this.x = 0;
                 if (this.y < 0) this.y = height;
                 if (this.y > height) this.y = 0;
-
                 if (this.life <= 0) this.reset();
             }
-
             draw() {
-                ctx.save();
-                ctx.globalAlpha = this.life;
-                const size = this.size + Math.sin(this.pulse) * 5;
-
-                // RAINBOW STROKE
-                ctx.strokeStyle = `hsl(${this.hue}, 100%, 50%)`;
-                ctx.lineWidth = 3;
-                ctx.shadowBlur = 40;
-                ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
-
-                // DRAW TRIANGLE
+                ctx.globalAlpha = this.life * 0.8;
+                ctx.fillStyle = `hsl(${this.hue}, 100%, 60%)`;
                 ctx.beginPath();
-                for (let i = 0; i < 3; i++) {
-                    const angle = time * 10 + (i * Math.PI * 2 / 3);
-                    const x = this.x + Math.cos(angle) * size;
-                    const y = this.y + Math.sin(angle) * size;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.closePath();
-                ctx.stroke();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.restore();
             }
         }
 
-        // HYPER-SPIRAL - faster, more chaotic
+        // SIMPLIFIED SPIRAL
         class RainbowSpiral {
             constructor(x, y) {
                 this.x = x;
                 this.y = y;
                 this.radius = 0;
-                this.maxRadius = Math.min(width, height) * 0.6;
+                this.maxRadius = Math.min(width, height) * 0.4;
                 this.angle = 0;
                 this.hue = 0;
-                this.spinSpeed = (Math.random() - 0.5) * 0.5;
             }
-
             update() {
-                this.radius += 8; // MUCH FASTER
-                this.angle += this.spinSpeed * 5; // CHAOTIC SPIN
-                this.hue += 20; // FAST RAINBOW
-
+                this.radius += 4;
+                this.angle += 0.02;
+                this.hue += 5;
                 if (this.radius > this.maxRadius) {
                     this.radius = 0;
                     this.x = Math.random() * width;
                     this.y = Math.random() * height;
-                    this.spinSpeed = (Math.random() - 0.5) * 0.5;
                 }
             }
-
             draw() {
                 ctx.save();
                 ctx.translate(this.x, this.y);
                 ctx.rotate(this.angle);
-
-                for (let i = 0; i < 30; i++) {
-                    const r = this.radius - i * 15;
-                    if (r < 0) continue;
-
-                    const hue = (this.hue + i * 30) % 360;
-                    ctx.strokeStyle = `hsla(${hue}, 100%, 60%, ${1 - i/30})`;
-                    ctx.lineWidth = 4;
-                    ctx.shadowBlur = 50;
-                    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
-
-                    // CHAOTIC SPIRAL
-                    ctx.beginPath();
-                    const arms = 8;
-                    for (let arm = 0; arm < arms; arm++) {
-                        const armAngle = (arm / arms) * Math.PI * 2;
-                        for (let a = 0; a < Math.PI * 6; a += 0.05) {
-                            const sr = r * (1 - a/(Math.PI * 6)) + Math.sin(a * 5 + time * 10) * 30;
-                            const sx = Math.cos(armAngle + a) * sr;
-                            const sy = Math.sin(armAngle + a) * sr;
-                            if (a === 0) ctx.moveTo(sx, sy);
-                            else ctx.lineTo(sx, sy);
-                        }
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 60%, 0.3)`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                const arms = qualityMode === 'low' ? 3 : 4;
+                for (let arm = 0; arm < arms; arm++) {
+                    const armAngle = (arm / arms) * Math.PI * 2;
+                    for (let a = 0; a < Math.PI * 4; a += 0.1) {
+                        const r = this.radius * (1 - a/(Math.PI * 4));
+                        const x = Math.cos(armAngle + a) * r;
+                        const y = Math.sin(armAngle + a) * r;
+                        if (a === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
                     }
-                    ctx.stroke();
                 }
-
+                ctx.stroke();
                 ctx.restore();
             }
         }
 
-        // HYPER-MANDALA - faster, flashing, chaotic
-        function drawMandala() {
-            const cx = width / 2;
-            const cy = height / 2;
-            const maxRadius = Math.min(width, height) * 0.6;
-
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(time * 2); // FAST ROTATION
-            ctx.translate(-cx, -cy);
-
-            for (let r = 20; r < maxRadius; r += 15) {
-                const hue = (time * 100 + r * 2) % 360; // FAST RAINBOW
-                const flash = Math.sin(time * 20 + r) * 0.5 + 0.5;
-                ctx.strokeStyle = `hsla(${hue}, 100%, ${50 + flash * 50}%, ${0.3 + flash * 0.4})`;
-                ctx.lineWidth = 3;
-                ctx.shadowBlur = 30 + flash * 20;
-                ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
-
-                ctx.beginPath();
-                const segments = 16;
-                for (let i = 0; i <= segments; i++) {
-                    const angle = (i / segments) * Math.PI * 2 + time * 5; // CHAOTIC SPIN
-                    const wave = Math.sin(angle * 8 + time * 15) * 20 + Math.cos(time * 10) * 10;
-                    const x = cx + Math.cos(angle) * (r + wave);
-                    const y = cy + Math.sin(angle) * (r + wave);
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.closePath();
-                ctx.stroke();
-            }
-            ctx.restore();
+        // Initialize particles based on quality
+        function initParticles() {
+            particles = [];
+            spirals = [];
+            const particleCount = qualityMode === 'low' ? 20 : (qualityMode === 'medium' ? 35 : 50);
+            const spiralCount = qualityMode === 'low' ? 1 : (qualityMode === 'medium' ? 2 : 3);
+            for (let i = 0; i < particleCount; i++) particles.push(new PsyParticle());
+            for (let i = 0; i < spiralCount; i++) spirals.push(new RainbowSpiral(Math.random() * width, Math.random() * height));
         }
+        initParticles();
 
-        // Wave interference pattern
-        function drawWaves() {
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
+        // OPTIMIZED ANIMATION LOOP
+        function animate(now) {
+            requestAnimationFrame(animate);
+            
+            // Frame skipping for performance
+            const targetFPS = qualityMode === 'low' ? 20 : (qualityMode === 'medium' ? 30 : 60);
+            const frameInterval = 1000 / targetFPS;
+            if (now - lastFrame < frameInterval) return;
+            lastFrame = now;
+            
+            time += 0.033;
 
-            for (let y = 0; y < height; y += 4) {
-                for (let x = 0; x < width; x += 4) {
-                    const cx = width / 2;
-                    const cy = height / 2;
+            if (fenthouseActive) {
+                // Fast fade
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                ctx.fillRect(0, 0, width, height);
 
-                    const d1 = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
-                    const d2 = Math.sqrt((x - cx * 0.5) ** 2 + (y - cy * 1.5) ** 2);
+                // Draw spirals
+                spirals.forEach(s => { s.update(); s.draw(); });
 
-                    const wave1 = Math.sin(d1 * 0.02 - time * 3) * 0.5 + 0.5;
-                    const wave2 = Math.sin(d2 * 0.02 - time * 2) * 0.5 + 0.5;
-                    const combined = (wave1 + wave2) / 2;
+                // Draw particles
+                particles.forEach(p => { p.update(); p.draw(); });
 
-                    const hue = (combined * 360 + time * 50) % 360;
-                    const brightness = combined * 100;
-
-                    const idx = (y * width + x) * 4;
-                    const color = hslToRgb(hue / 360, 1, brightness / 200);
-
-                    for (let dy = 0; dy < 4 && y + dy < height; dy++) {
-                        for (let dx = 0; dx < 4 && x + dx < width; dx++) {
-                            const i = ((y + dy) * width + (x + dx)) * 4;
-                            data[i] = color[0];
-                            data[i + 1] = color[1];
-                            data[i + 2] = color[2];
-                            data[i + 3] = 255;
-                        }
-                    }
+                // Occasional flash
+                if (Math.random() < 0.03) {
+                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.2)`;
+                    ctx.fillRect(0, 0, width, height);
                 }
-            }
 
-            ctx.putImageData(imageData, 0, 0);
-        }
-
-        function hslToRgb(h, s, l) {
-            let r, g, b;
-            if (s === 0) {
-                r = g = b = l;
+                // Update chaos display
+                const chaosEl = document.getElementById('chaosDisplay');
+                if (chaosEl && Math.random() < 0.1) {
+                    chaosEl.textContent = '42069';
+                }
             } else {
-                const hue2rgb = (p, q, t) => {
-                    if (t < 0) t += 1;
-                    if (t > 1) t -= 1;
-                    if (t < 1/6) return p + (q - p) * 6 * t;
-                    if (t < 1/2) return q;
-                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-                    return p;
-                };
-                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-                const p = 2 * l - q;
-                r = hue2rgb(p, q, h + 1/3);
-                g = hue2rgb(p, q, h);
-                b = hue2rgb(p, q, h - 1/3);
+                // Slow fade when inactive
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
+                ctx.fillRect(0, 0, width, height);
             }
-            return [r * 255, g * 255, b * 255];
         }
 
-        // Initialize - MORE PARTICLES, MORE CHAOS
-        for (let i = 0; i < 300; i++) { // 3x particles
-            particles.push(new PsyParticle());
-        }
-
-        for (let i = 0; i < 5; i++) { // More spirals
-            spirals.push(new RainbowSpiral(
-                Math.random() * width,
-                Math.random() * height
-            ));
-        }
-
+        // Check Fenthouse status
         async function checkFenthouse() {
             try {
                 const response = await fetch('/api/metrics?t=' + Date.now());
                 const data = await response.json();
-                const wasActive = fenthouseActive;
                 fenthouseActive = data.fenthouse_active === true;
                 countdown = data.fenthouse_countdown;
                 
-                // Track Fenthouse expiry for sync
                 if (data.fenthouse_countdown) {
                     fenthouseExpiry = Date.now() + (data.fenthouse_countdown.total_seconds * 1000);
                 }
@@ -473,109 +312,15 @@
                 document.getElementById('activeOverlay').style.display = fenthouseActive ? 'block' : 'none';
                 document.getElementById('inactiveOverlay').style.display = fenthouseActive ? 'none' : 'block';
 
-                if (countdown && !ytPlayer) {
-                    document.getElementById('countdown').textContent = 
-                        `🔒 ${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`;
-                }
-                
-                // SYNC MOVIE WITH FENTHOUSE TIMER
-                if (fenthouseActive && ytPlayer) {
-                    syncMovieWithFenthouse();
+                if (countdown && !videoPlayer) {
+                    document.getElementById('countdown').textContent = `🔒 ${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`;
                 }
             } catch (e) {
-                console.error('Fetch error:', e);
-            }
-        }
-        
-        // START SCREEN CLICK HANDLER
-        document.getElementById('start-screen').addEventListener('click', function() {
-            console.log('🌿 ENTERING FENTHOUSE - starting video...');
-            this.style.display = 'none';
-            document.getElementById('video-container').style.display = 'block';
-            loadRandomMovie();
-        });
-
-        // GLITCH EFFECT
-        function glitch() {
-            if (Math.random() < 0.1) { // 10% chance per frame
-                const x = Math.random() * width;
-                const y = Math.random() * height;
-                const w = Math.random() * 100 + 50;
-                const h = Math.random() * 10 + 5;
-                const offset = (Math.random() - 0.5) * 30;
-
-                try {
-                    const imageData = ctx.getImageData(x, y, w, h);
-                    ctx.putImageData(imageData, x + offset, y);
-                } catch(e) {}
+                // Silent fail
             }
         }
 
-        // FLASH EFFECT
-        function flash() {
-            if (Math.random() < 0.05) { // 5% chance
-                ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.3)`;
-                ctx.fillRect(0, 0, width, height);
-            }
-        }
-
-        function animate() {
-            time += 0.033; // 2x SPEED
-
-            if (fenthouseActive) {
-                // CHAOTIC CLEAR
-                ctx.fillStyle = `rgba(${Math.random() * 20}, 0, ${Math.random() * 20}, 0.15)`;
-                ctx.fillRect(0, 0, width, height);
-
-                // Draw waves
-                drawWaves();
-
-                // Draw spirals
-                spirals.forEach(s => {
-                    s.update();
-                    s.draw();
-                });
-
-                // Draw mandala overlay
-                drawMandala();
-
-                // Draw particles
-                particles.forEach(p => {
-                    p.update();
-                    p.draw();
-                });
-
-                // GLITCH AND FLASH
-                glitch();
-                flash();
-
-            } else {
-                // Dark inactive mode
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, width, height);
-
-                // PULSE GRID
-                ctx.strokeStyle = `rgba(34, 34, 34, ${0.3 + Math.sin(time) * 0.2})`;
-                ctx.lineWidth = 1;
-                for (let x = 0; x < width; x += 50) {
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, height);
-                    ctx.stroke();
-                }
-                for (let y = 0; y < height; y += 50) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(width, y);
-                    ctx.stroke();
-                }
-            }
-
-            requestAnimationFrame(animate);
-        }
-
-        // ========== ARCHIVE.ORG VIDEO BACKGROUND ==========
-        // 75+ Public domain movies from backend API (reliable, permanent)
+        // ARCHIVE.ORG VIDEO BACKGROUND
         let MOVIES = [];
         let moviesLoaded = false;
         let videoPlayer = null;
@@ -584,124 +329,92 @@
         let movieStartTime = null;
         let fenthouseExpiry = null;
 
-        // Load movie catalog from backend
         async function loadMovieCatalog() {
             try {
                 const res = await fetch('/api/movies?t=' + Date.now());
                 const data = await res.json();
                 MOVIES = data.movies || [];
                 moviesLoaded = true;
-                console.log(`🎬 Loaded ${MOVIES.length} movies from Archive.org`);
             } catch (e) {
-                console.error('Failed to load movies:', e);
-                // Fallback to empty - will try again later
                 MOVIES = [];
             }
         }
-        loadMovieCatalog(); // Load on startup
+        loadMovieCatalog();
 
         function getNextMovie() {
-            if (MOVIES.length === 0) {
-                console.log('Movies not loaded yet, retying...');
-                loadMovieCatalog();
-                return null;
-            }
-            // Try movies we haven't tried yet
+            if (MOVIES.length === 0) return null;
             for (let i = 0; i < MOVIES.length; i++) {
                 const idx = (currentMovieIndex + 1 + i) % MOVIES.length;
-                if (!triedMovies.has(idx)) {
-                    return idx;
-                }
+                if (!triedMovies.has(idx)) return idx;
             }
-            // All movies tried, reset and try again
             triedMovies.clear();
-            return (currentMovieIndex + 1) % MOVIES.length;
+            return 0;
         }
 
         function loadMovie(index) {
+            if (index === null || MOVIES.length === 0) return;
             currentMovieIndex = index;
             triedMovies.add(index);
             const movie = MOVIES[index];
-            console.log('Loading movie:', movie.title, movie.url);
-
-            // Create or get video element
+            
             let videoEl = document.getElementById('fenthouse-video');
             if (!videoEl) {
                 videoEl = document.createElement('video');
                 videoEl.id = 'fenthouse-video';
-                videoEl.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1;filter:contrast(150%) saturate(200%)';
+                videoEl.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1;filter:contrast(120%) saturate(150%)';
                 videoEl.autoplay = true;
                 videoEl.loop = true;
                 videoEl.muted = true;
                 document.body.insertBefore(videoEl, document.body.firstChild);
             }
-
-            // Set source and play
             videoEl.src = movie.url;
             videoEl.play().then(() => {
                 movieStartTime = Date.now();
                 videoPlayer = videoEl;
-                console.log('✅ Playing Archive.org movie:', movie.title);
-
-                // Update status
                 const statusEl = document.getElementById('countdown');
-                if (statusEl) {
-                    statusEl.innerHTML = `🔒 FENTHOUSE | 🎬 ${movie.title}`;
-                }
-            }).catch(e => {
-                console.error('❌ Playback failed:', movie.title, e);
-                // Try next movie after a delay
+                if (statusEl) statusEl.innerHTML = `🔒 FENTHOUSE | 🎬 ${movie.title}`;
+            }).catch(() => {
                 setTimeout(() => loadMovie(getNextMovie()), 1000);
             });
-
-            // Handle errors
-            videoEl.onerror = () => {
-                console.error('❌ Video error:', movie.title);
-                setTimeout(() => loadMovie(getNextMovie()), 1000);
-            };
+            videoEl.onerror = () => setTimeout(() => loadMovie(getNextMovie()), 1000);
         }
 
         function loadRandomMovie() {
             if (MOVIES.length === 0) {
-                console.log('Movies not loaded yet, using standalone player...');
-                // Open standalone player as fallback
                 window.open('/movie-player', '_blank');
                 return;
             }
-            const idx = Math.floor(Math.random() * MOVIES.length);
-            loadMovie(idx);
+            loadMovie(Math.floor(Math.random() * MOVIES.length));
         }
 
         function syncMovieWithFenthouse() {
             if (!videoPlayer || !fenthouseExpiry || !movieStartTime) return;
-
             const now = Date.now();
             const fentRemaining = fenthouseExpiry - now;
-
-            // If Fenthouse is about to expire, don't restart
-            if (fentRemaining < 10000) return; // Less than 10 seconds left
-
-            // Sync: restart movie when Fenthouse has 1 hour left, 30 min left, etc
-            const syncPoints = [3600000, 1800000, 600000, 300000, 60000]; // 1hr, 30min, 10min, 5min, 1min
+            if (fentRemaining < 10000) return;
+            const syncPoints = [3600000, 1800000, 600000, 300000, 60000];
             for (const point of syncPoints) {
                 if (fentRemaining > point && fentRemaining < point + 5000) {
-                    // Near a sync point - restart movie
                     videoPlayer.currentTime = 0;
                     videoPlayer.play();
                     movieStartTime = now;
-                    console.log('🔄 Synced movie to Fenthouse timer');
                     break;
                 }
             }
         }
 
+        // Start screen click
+        document.getElementById('start-screen').addEventListener('click', function() {
+            this.style.display = 'none';
+            document.getElementById('video-container').style.display = 'block';
+            loadRandomMovie();
+        });
+
         // Initialize
         checkFenthouse();
-        animate();
-        setInterval(checkFenthouse, 5000); // Check Fenthouse status every 5s
-        setInterval(() => {
-            if (videoPlayer) syncMovieWithFenthouse();
-        }, 10000); // Sync movie loop every 10s (only if player exists)
+        animate(0);
+        setInterval(checkFenthouse, 5000);
+        setInterval(() => { if (videoPlayer) syncMovieWithFenthouse(); }, 10000);
     </script>
 </body>
 </html>

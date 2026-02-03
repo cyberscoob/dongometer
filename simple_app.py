@@ -758,21 +758,21 @@ class DongometerHandler(BaseHTTPRequestHandler):
             
             # Get hourly timeline (last 24 hours)
             day_ago = int((datetime.now() - timedelta(hours=24)).timestamp() * 1000)
-            query = f'''
+            query = '''
             var hours = {};
-            var dayAgo = {day_ago};
-            db.events.find({{origin_server_ts: {{$gt: dayAgo}}}}, {{origin_server_ts: 1}}).forEach(function(doc) {{
+            var dayAgo = ''' + str(day_ago) + ''';
+            db.events.find({"origin_server_ts": {$gt: dayAgo}}, {"origin_server_ts": 1}).forEach(function(doc) {
                 var ts = doc.origin_server_ts;
                 var high = ts.high || 0;
                 var low = ts.low || ts;
                 var timestamp = (high * 4294967296) + (low >>> 0);
                 var hour = new Date(timestamp).getHours();
                 hours[hour] = (hours[hour] || 0) + 1;
-            }});
+            });
             var result = [];
-            for (var i = 0; i < 24; i++) {{
-                result.push({{hour: i + ':00', count: hours[i] || 0}});
-            }}
+            for (var i = 0; i < 24; i++) {
+                result.push({hour: i + ":00", count: hours[i] || 0});
+            }
             print(JSON.stringify(result));
             '''
             result = subprocess.run(

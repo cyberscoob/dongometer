@@ -748,14 +748,13 @@ class DongometerHandler(BaseHTTPRequestHandler):
             })
 
     def serve_youtube_stream(self):
-        """Stream YouTube video through proxy (for WebGL CORS access)"""
+        """Get YouTube direct stream URL - returns JSON to avoid blocking proxy"""
         import subprocess
-        from urllib.request import Request, urlopen
-        from urllib.error import URLError
         
         parsed = urlparse(self.path)
         params = parse_qs(parsed.query)
         video_id = params.get('id', [''])[0]
+        redirect = params.get('redirect', ['false'])[0].lower() == 'true'
         
         if not video_id:
             self.send_json({'error': 'No video ID provided'})
@@ -781,57 +780,22 @@ class DongometerHandler(BaseHTTPRequestHandler):
                 self.send_json({'error': 'No video stream URL found'})
                 return
             
-            # Stream the video with range request support using urllib
-            headers = {}
-            range_header = self.headers.get('Range')
-            if range_header:
-                headers['Range'] = range_header
-            
-            # Forward request to YouTube CDN
-            req = Request(direct_url, headers=headers)
-            resp = urlopen(req, timeout=30)
-            
-            # Send response
-            status_code = 206 if range_header and resp.getcode() == 206 else 200
-            self.send_response(status_code)
-            
-            # Forward important headers
-            content_type = resp.headers.get('Content-Type', 'video/mp4')
-            self.send_header('Content-Type', content_type)
-            
-            content_length = resp.headers.get('Content-Length')
-            if content_length:
-                self.send_header('Content-Length', content_length)
-            content_range = resp.headers.get('Content-Range')
-            if content_range:
-                self.send_header('Content-Range', content_range)
-            accept_ranges = resp.headers.get('Accept-Ranges')
-            if accept_ranges:
-                self.send_header('Accept-Ranges', accept_ranges)
-            
-            # CORS headers so WebGL can use the video
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Headers', 'Range')
-            self.end_headers()
-            
-            # Stream the response
-            chunk_size = 64 * 1024
-            bytes_sent = 0
-            while True:
-                chunk = resp.read(chunk_size)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                bytes_sent += len(chunk)
-                # Flush periodically to avoid buffering
-                if bytes_sent % (256 * 1024) == 0:
-                    self.wfile.flush()
+            if redirect:
+                # Non-blocking redirect to direct URL
+                self.send_response(302)
+                self.send_header('Location', direct_url)
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+            else:
+                # Return JSON with direct URL - frontend handles streaming
+                self.send_json({
+                    'video_id': video_id,
+                    'stream_url': direct_url,
+                    'type': 'youtube_direct'
+                })
                     
         except subprocess.TimeoutExpired:
             self.send_json({'error': 'Timeout getting video URL'})
-        except URLError as e:
-            print(f"URL error streaming video: {e}")
-            self.send_json({'error': 'Failed to stream video'})
         except Exception as e:
             print(f"Streaming error: {e}")
             self.send_json({'error': str(e)})

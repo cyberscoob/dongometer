@@ -574,52 +574,38 @@
             requestAnimationFrame(animate);
         }
 
-        // ========== YOUTUBE VIDEO BACKGROUND ==========
-        // 100 Public domain / free movies from r/fullmoviesonyoutube
-        const MOVIES = [
-            { id: "Ub1JxQlPTHM", title: "The Spongebob Movie: Sponge Out of Water" },
-            { id: "uZIpS506Hig", title: "Buried on Sunday (1992)" },
-            { id: "Hwg8eCJurR0", title: "The Visit (1964)" },
-            { id: "PENfFrPODiI", title: "Robin Hood (2018)" },
-            { id: "x5_KW9mD_E8", title: "Slaxx (2020)" },
-            { id: "NyUHbb8EQ8E", title: "Elizabeth Harvest (2018)" },
-            { id: "T3HJ9d3p2hY", title: "House on Haunted Hill (1959)" },
-            { id: "M0_0ZOFz3rE", title: "Carnival of Souls (1962)" },
-            { id: "rkdT9f-4g54", title: "The Last Man on Earth (1964)" },
-            { id: "8LxXGhK2vZ0", title: "The Brain That Wouldn't Die (1962)" },
-            { id: "5sY6N3YQ7S4", title: "Santa Claus Conquers the Martians (1964)" },
-            { id: "X8ZxO8L8-00", title: "Plan 9 from Outer Space (1957)" },
-            { id: "K3m2n4p6qR8", title: "Night of the Living Dead (1968)" },
-            { id: "H5j7k9l2mN4", title: "Dementia 13 (1963)" },
-            { id: "G6h8j0k3lP5", title: "The Little Shop of Horrors (1960)" },
-            { id: "F7g9h1j4kQ6", title: "Creature from the Haunted Sea (1961)" },
-            { id: "D8f0h2j5kR7", title: "The Giant Gila Monster (1959)" },
-            { id: "C9g1h3j6kS8", title: "Attack of the Giant Leeches (1959)" },
-            { id: "B0h2i4j7kT9", title: "The Killer Shrews (1959)" },
-            { id: "A1i3j5k8lU0", title: "Teenagers from Outer Space (1959)" },
-            { id: "Z2j4k6l9mV1", title: "The Phantom from 10,000 Leagues (1955)" },
-            { id: "Y3k5l7m0nW2", title: "The Beast of Yucca Flats (1961)" },
-            { id: "X4l6m8n1oX3", title: "Eegah (1962)" },
-            { id: "W5m7n9o2pY4", title: "The Creeping Terror (1964)" },
-            { id: "V6n8o0p3qZ5", title: "Monster a Go-Go! (1965)" },
-            { id: "U7o9p1q4rA6", title: "The Beast of Hollow Mountain (1956)" },
-            { id: "S8p0q2r5sB7", title: "The Violent Years (1956)" },
-            { id: "R9q1r3s6tC8", title: "The Starfighters (1964)" },
-            { id: "Q0r2s4t7uD9", title: "Red Zone Cuba (1966)" },
-            { id: "P1s3t5u8vE0", title: "The Skydivers (1963)" }
-        ];
-
-        let ytPlayer = null;
+        // ========== ARCHIVE.ORG VIDEO BACKGROUND ==========
+        // 75+ Public domain movies from backend API (reliable, permanent)
+        let MOVIES = [];
+        let moviesLoaded = false;
+        let videoPlayer = null;
         let currentMovieIndex = -1;
         let triedMovies = new Set();
         let movieStartTime = null;
         let fenthouseExpiry = null;
 
-        function onYouTubeIframeAPIReady() {
-            console.log('YouTube API ready');
+        // Load movie catalog from backend
+        async function loadMovieCatalog() {
+            try {
+                const res = await fetch('/api/movies?t=' + Date.now());
+                const data = await res.json();
+                MOVIES = data.movies || [];
+                moviesLoaded = true;
+                console.log(`🎬 Loaded ${MOVIES.length} movies from Archive.org`);
+            } catch (e) {
+                console.error('Failed to load movies:', e);
+                // Fallback to empty - will try again later
+                MOVIES = [];
+            }
         }
+        loadMovieCatalog(); // Load on startup
 
         function getNextMovie() {
+            if (MOVIES.length === 0) {
+                console.log('Movies not loaded yet, retying...');
+                loadMovieCatalog();
+                return null;
+            }
             // Try movies we haven't tried yet
             for (let i = 0; i < MOVIES.length; i++) {
                 const idx = (currentMovieIndex + 1 + i) % MOVIES.length;
@@ -636,68 +622,61 @@
             currentMovieIndex = index;
             triedMovies.add(index);
             const movie = MOVIES[index];
-            console.log('Loading movie:', movie.title, movie.id);
+            console.log('Loading movie:', movie.title, movie.url);
 
-            // Destroy existing player if any
-            if (ytPlayer && ytPlayer.destroy) {
-                ytPlayer.destroy();
+            // Create or get video element
+            let videoEl = document.getElementById('fenthouse-video');
+            if (!videoEl) {
+                videoEl = document.createElement('video');
+                videoEl.id = 'fenthouse-video';
+                videoEl.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:-1;filter:contrast(150%) saturate(200%)';
+                videoEl.autoplay = true;
+                videoEl.loop = true;
+                videoEl.muted = true;
+                document.body.insertBefore(videoEl, document.body.firstChild);
             }
 
-            ytPlayer = new YT.Player('youtube-player', {
-                videoId: movie.id,
-                playerVars: {
-                    autoplay: 1,
-                    controls: 0,
-                    disablekb: 1,
-                    fs: 0,
-                    rel: 0,
-                    modestbranding: 1,
-                    playsinline: 1,
-                    mute: 1,
-                    start: 0
-                },
-                events: {
-                    onReady: (event) => {
-                        event.target.playVideo();
-                        movieStartTime = Date.now();
-                        console.log('✅ Playing:', movie.title);
+            // Set source and play
+            videoEl.src = movie.url;
+            videoEl.play().then(() => {
+                movieStartTime = Date.now();
+                videoPlayer = videoEl;
+                console.log('✅ Playing Archive.org movie:', movie.title);
 
-                        // Update status with current movie
-                        const statusEl = document.getElementById('countdown');
-                        if (statusEl) {
-                            statusEl.innerHTML = `🔒 FENTHOUSE | 🎬 ${movie.title}`;
-                        }
-                    },
-                    onStateChange: (event) => {
-                        if (event.data === YT.PlayerState.ENDED) {
-                            // Loop to beginning
-                            event.target.seekTo(0);
-                            event.target.playVideo();
-                            movieStartTime = Date.now();
-                        }
-                    },
-                    onError: (e) => {
-                        console.error('❌ Video unavailable:', movie.title, 'Error:', e.data);
-                        // Try next movie
-                        setTimeout(() => loadMovie(getNextMovie()), 500);
-                    }
+                // Update status
+                const statusEl = document.getElementById('countdown');
+                if (statusEl) {
+                    statusEl.innerHTML = `🔒 FENTHOUSE | 🎬 ${movie.title}`;
                 }
+            }).catch(e => {
+                console.error('❌ Playback failed:', movie.title, e);
+                // Try next movie after a delay
+                setTimeout(() => loadMovie(getNextMovie()), 1000);
             });
+
+            // Handle errors
+            videoEl.onerror = () => {
+                console.error('❌ Video error:', movie.title);
+                setTimeout(() => loadMovie(getNextMovie()), 1000);
+            };
         }
 
         function loadRandomMovie() {
+            if (MOVIES.length === 0) {
+                console.log('Movies not loaded yet, using standalone player...');
+                // Open standalone player as fallback
+                window.open('/movie-player', '_blank');
+                return;
+            }
             const idx = Math.floor(Math.random() * MOVIES.length);
             loadMovie(idx);
         }
 
         function syncMovieWithFenthouse() {
-            if (!ytPlayer || !fenthouseExpiry || !movieStartTime) return;
+            if (!videoPlayer || !fenthouseExpiry || !movieStartTime) return;
 
             const now = Date.now();
             const fentRemaining = fenthouseExpiry - now;
-            const movieDuration = MOVIES[currentMovieIndex].duration * 1000;
-            const movieElapsed = now - movieStartTime;
-            const movieProgress = movieElapsed % movieDuration;
 
             // If Fenthouse is about to expire, don't restart
             if (fentRemaining < 10000) return; // Less than 10 seconds left
@@ -707,8 +686,8 @@
             for (const point of syncPoints) {
                 if (fentRemaining > point && fentRemaining < point + 5000) {
                     // Near a sync point - restart movie
-                    ytPlayer.seekTo(0);
-                    ytPlayer.playVideo();
+                    videoPlayer.currentTime = 0;
+                    videoPlayer.play();
                     movieStartTime = now;
                     console.log('🔄 Synced movie to Fenthouse timer');
                     break;
@@ -716,18 +695,12 @@
             }
         }
 
-        // Load YouTube API
-        const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
         // Initialize
         checkFenthouse();
         animate();
         setInterval(checkFenthouse, 5000); // Check Fenthouse status every 5s
         setInterval(() => {
-            if (ytPlayer) syncMovieWithFenthouse();
+            if (videoPlayer) syncMovieWithFenthouse();
         }, 10000); // Sync movie loop every 10s (only if player exists)
     </script>
 </body>

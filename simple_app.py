@@ -656,6 +656,12 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_coverage_fast()
         elif path == '/api/indexer-coverage':
             self.serve_indexer_coverage_fast()
+        elif path == '/api/movies':
+            self.serve_movies()
+        elif path == '/api/movie-stream':
+            self.serve_movie_stream()
+        elif path == '/movie-player':
+            self.serve_movie_player()
         else:
             self.send_error(404)
 
@@ -688,6 +694,237 @@ class DongometerHandler(BaseHTTPRequestHandler):
     
     def serve_manifold_3d(self):
         html = open('/home/scoob/dongometer/templates/manifold_3d.html').read() if os.path.exists('/home/scoob/dongometer/templates/manifold_3d.html') else '<h1>Dong Manifold 3D</h1>'
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode())
+
+    def _load_movies(self):
+        """Load movie database from JSON"""
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'movies.json'), 'r') as f:
+                data = json.load(f)
+                return data.get('movies', [])
+        except Exception as e:
+            print(f"Error loading movies: {e}")
+            return []
+
+    def serve_movies(self):
+        """Serve movie catalog"""
+        movies = self._load_movies()
+        self.send_json({'count': len(movies), 'movies': movies})
+
+    def serve_movie_stream(self):
+        """Stream movie from Archive.org (proxy or redirect based on params)"""
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        movie_id = params.get('id', [''])[0]
+        redirect = params.get('redirect', ['true'])[0].lower() == 'true'
+        
+        movies = self._load_movies()
+        movie = next((m for m in movies if m['id'] == movie_id), None)
+        
+        if not movie:
+            self.send_json({'error': 'Movie not found'})
+            return
+        
+        if redirect:
+            # Redirect to Archive.org directly (most efficient)
+            self.send_response(302)
+            self.send_header('Location', movie['url'])
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+        else:
+            # Return movie metadata for client-side playback
+            self.send_json({
+                'id': movie['id'],
+                'title': movie['title'],
+                'stream_url': movie['url'],
+                'type': 'archive_org'
+            })
+
+    def serve_movie_player(self):
+        """Serve a standalone movie player page"""
+        html = '''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>📽️ Fenthouse Cinema</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        #video-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        #controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.8));
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        #video-container:hover #controls { opacity: 1; }
+        #movie-title {
+            font-size: 18px;
+            text-shadow: 0 0 10px #0f0;
+        }
+        #buttons {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background: rgba(0, 255, 0, 0.2);
+            border: 1px solid #0f0;
+            color: #0f0;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: rgba(0, 255, 0, 0.4);
+            box-shadow: 0 0 10px #0f0;
+        }
+        #playlist {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 80vh;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #0f0;
+            overflow-y: auto;
+            padding: 10px;
+            display: none;
+        }
+        .movie-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #333;
+            transition: all 0.2s;
+        }
+        .movie-item:hover {
+            background: rgba(0, 255, 0, 0.2);
+        }
+        .movie-item.active {
+            background: rgba(0, 255, 0, 0.3);
+            color: #fff;
+        }
+        #show-playlist {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div id="video-container">
+        <div class="loading">🌿 LOADING FENTHOUSE CINEMA 🌿</div>
+        <video id="player" controls autoplay></video>
+        <div id="controls">
+            <span id="movie-title">Fenthouse Cinema</span>
+            <div id="buttons">
+                <button onclick="prevMovie()">⏮ PREVIOUS</button>
+                <button onclick="nextMovie()">NEXT ⏭</button>
+                <button onclick="togglePlaylist()">📋 PLAYLIST</button>
+                <button onclick="toggleEffects()">🌀 EFFECTS</button>
+            </div>
+        </div>
+    </div>
+    <button id="show-playlist" onclick="togglePlaylist()">📋 MOVIES</button>
+    <div id="playlist"></div>
+
+    <script>
+        let movies = [];
+        let currentIndex = 0;
+        let effectsEnabled = false;
+        const player = document.getElementById('player');
+        const titleEl = document.getElementById('movie-title');
+        const playlistEl = document.getElementById('playlist');
+
+        async function loadMovies() {
+            try {
+                const res = await fetch('/api/movies');
+                const data = await res.json();
+                movies = data.movies;
+                renderPlaylist();
+                playMovie(0);
+                document.querySelector('.loading').style.display = 'none';
+            } catch (e) {
+                console.error('Failed to load movies:', e);
+                document.querySelector('.loading').textContent = '⚠️ ERROR LOADING MOVIES';
+            }
+        }
+
+        function renderPlaylist() {
+            playlistEl.innerHTML = movies.map((m, i) => 
+                `<div class="movie-item ${i === currentIndex ? 'active' : ''}" onclick="playMovie(${i})">${i+1}. ${m.title}</div>`
+            ).join('');
+        }
+
+        function playMovie(index) {
+            if (index < 0) index = movies.length - 1;
+            if (index >= movies.length) index = 0;
+            currentIndex = index;
+            const movie = movies[index];
+            player.src = movie.url;
+            titleEl.textContent = movie.title;
+            player.play().catch(e => console.log('Autoplay blocked:', e));
+            renderPlaylist();
+        }
+
+        function nextMovie() { playMovie(currentIndex + 1); }
+        function prevMovie() { playMovie(currentIndex - 1); }
+        function togglePlaylist() { 
+            playlistEl.style.display = playlistEl.style.display === 'none' ? 'block' : 'none';
+        }
+        function toggleEffects() {
+            effectsEnabled = !effectsEnabled;
+            if (effectsEnabled) {
+                player.style.filter = 'contrast(150%) saturate(200%) hue-rotate(90deg)';
+            } else {
+                player.style.filter = 'none';
+            }
+        }
+
+        player.addEventListener('ended', nextMovie);
+        loadMovies();
+    </script>
+</body>
+</html>'''
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()

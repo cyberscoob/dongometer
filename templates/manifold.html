@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dong Manifold 🌌 | Chaos Visualization</title>
+    <title>Dong Manifold 🌌 | Multi-Dimensional Chaos</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #050508;
+            background: #000;
             color: #0f0;
             font-family: 'Courier New', monospace;
             overflow: hidden;
@@ -24,21 +24,31 @@
         .hud {
             position: absolute;
             z-index: 10;
-            background: rgba(0, 20, 0, 0.9);
+            background: rgba(0, 10, 0, 0.85);
             border: 1px solid #0f0;
             padding: 15px;
             font-size: 12px;
+            backdrop-filter: blur(5px);
         }
         
         .hud.top-left { top: 10px; left: 10px; border-radius: 0 15px 15px 0; }
         .hud.top-right { top: 10px; right: 10px; border-radius: 15px 0 0 15px; text-align: right; }
         .hud.bottom-left { bottom: 10px; left: 10px; border-radius: 0 15px 15px 0; }
+        .hud.center-overlay {
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #f0f;
+            display: none;
+            text-align: center;
+        }
         
         .hud-title {
             color: #0ff;
             font-weight: bold;
             margin-bottom: 10px;
             text-transform: uppercase;
+            letter-spacing: 2px;
         }
         
         .metric-row {
@@ -48,10 +58,10 @@
             min-width: 200px;
         }
         
-        .metric-label { color: #888; }
+        .metric-label { color: #666; }
         .metric-value { color: #0f0; font-weight: bold; }
         .metric-value.flood { color: #f00; animation: blink 0.3s infinite; }
-        .metric-value.fent { color: #0f0; text-shadow: 0 0 10px #0f0; font-size: 16px; }
+        .metric-value.fent { color: #0f0; text-shadow: 0 0 15px #0f0; font-size: 16px; animation: pulse 1s infinite; }
         
         .nav-link {
             display: inline-block;
@@ -62,14 +72,24 @@
             text-decoration: none;
             border-radius: 5px;
             font-weight: bold;
+            transition: all 0.3s;
         }
         
         .nav-link:hover {
             background: #0ff;
-            box-shadow: 0 0 15px #0ff;
+            box-shadow: 0 0 20px #0ff;
+            transform: scale(1.1);
+        }
+        
+        .dimension-info {
+            font-size: 10px;
+            color: #444;
+            margin-top: 5px;
+            font-style: italic;
         }
         
         @keyframes blink { 50% { opacity: 0.3; } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
     </style>
 </head>
 <body>
@@ -79,22 +99,27 @@
         <div class="hud top-left">
             <div class="hud-title">🌌 Dong Manifold</div>
             <div class="metric-row">
-                <span class="metric-label">Chaos:</span>
+                <span class="metric-label">Chaos (Z):</span>
                 <span class="metric-value" id="chaosVal">0.0</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Velocity:</span>
+                <span class="metric-label">Flow (X):</span>
                 <span class="metric-value" id="velocityVal">0</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Direction:</span>
-                <span class="metric-value" id="directionVal">→</span>
+                <span class="metric-label">Density (Y):</span>
+                <span class="metric-value" id="densityVal">0</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Depth (T):</span>
+                <span class="metric-value" id="depthVal">0</span>
             </div>
             <a href="/" class="nav-link">⬅ Dashboard</a>
+            <div class="dimension-info">X: Chat | Y: Pizza | Z: Chaos | T: Time</div>
         </div>
         
         <div class="hud top-right">
-            <div class="hud-title">📊 Real-time Metrics</div>
+            <div class="hud-title">📊 Dimensional Metrics</div>
             <div class="metric-row">
                 <span class="metric-label">Chat (5m):</span>
                 <span class="metric-value" id="chat5Val">0</span>
@@ -107,11 +132,22 @@
                 <span class="metric-label">Pizza:</span>
                 <span class="metric-value" id="pizzaVal">0</span>
             </div>
+            <div class="metric-row">
+                <span class="metric-label">Glizz:</span>
+                <span class="metric-value" id="glizzVal">0</span>
+            </div>
         </div>
         
         <div class="hud bottom-left">
-            <div class="hud-title">🎯 Active Particles</div>
+            <div class="hud-title">🌀 Active Entities</div>
             <div class="metric-value" id="particleCount">0</div>
+            <div class="dimension-info">Particles + Rings + Portals</div>
+        </div>
+        
+        <div class="hud center-overlay" id="portalOverlay">
+            <div class="hud-title">🌀 DIMENSIONAL PORTAL ACTIVE</div>
+            <div>Chaos exceeds 42069</div>
+            <div style="font-size: 24px; margin: 10px;">🌿 FENTHOUSE ACHIEVED 🌿</div>
         </div>
     </div>
 
@@ -122,70 +158,88 @@
         let trajectory = [];
         let particles = [];
         let pulseRings = [];
+        let dimensionalPortals = [];
         let lastChaos = 0;
-        let animationId;
+        let frameCount = 0;
+        let centerX, centerY;
         
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            centerX = canvas.width / 2;
+            centerY = canvas.height / 2;
         }
         resize();
         window.addEventListener('resize', resize);
         
-        function logScale(value, maxVal = 1000) {
-            if (value <= 0) return 0;
-            return Math.log10(value + 1) / Math.log10(maxVal + 1);
-        }
-        
-        function getChaosClass(score) {
-            if (score >= 42069) return 'fent';
-            if (score > 1000) return 'heatdeath';
-            if (score > 95) return 'apocalyptic';
-            if (score > 80) return 'demonic';
-            if (score > 60) return 'chaotic';
-            if (score > 40) return 'active';
-            return 'calm';
+        // Multi-dimensional chaos mapping
+        function getChaosDimensions(chaos, chat, door, pizza, time) {
+            return {
+                x: centerX + (chat / 50) * Math.cos(time * 0.001) * 100,
+                y: centerY - (pizza / 20) * Math.sin(time * 0.001) * 100,
+                z: chaos, // Used for size/color
+                depth: Math.min(1, chaos / 1000), // 0-1 depth factor
+                rotation: time * 0.1 + chaos * 0.01
+            };
         }
         
         function getChaosColor(score) {
-            if (score >= 42069) return '#0f0';
+            if (score >= 42069) return '#0f0'; // Fenthouse green
+            if (score > 5000) return `hsl(${Date.now() / 10 % 360}, 100%, 50%)`; // Rainbow
             if (score > 1000) return '#f0f';
-            if (score > 500) return '#f0f';
-            if (score > 100) return '#f00';
-            if (score > 80) return '#f08';
-            if (score > 60) return '#f80';
-            if (score > 40) return '#ff0';
+            if (score > 500) return '#f00';
+            if (score > 100) return '#f80';
+            if (score > 50) return '#ff0';
             return '#0f0';
         }
         
+        function getParticleColor(chaos) {
+            const hue = (Date.now() / 20 + chaos * 0.5) % 360;
+            return `hsl(${hue}, 80%, 60%)`;
+        }
+        
         class Particle {
-            constructor(x, y, chaos) {
+            constructor(x, y, z, chaos) {
                 this.x = x;
                 this.y = y;
-                this.vx = (Math.random() - 0.5) * 4;
-                this.vy = (Math.random() - 0.5) * 4;
+                this.z = z; // Depth (0-1)
+                this.vx = (Math.random() - 0.5) * 3 * (1 + chaos/100);
+                this.vy = (Math.random() - 0.5) * 3 * (1 + chaos/100);
+                this.vz = (Math.random() - 0.5) * 0.02; // Depth velocity
                 this.life = 1;
-                this.decay = 0.01 + Math.random() * 0.02;
-                this.size = 2 + Math.random() * 4;
+                this.decay = 0.005 + (chaos / 100000);
+                this.size = 2 + (chaos / 50);
                 this.chaos = chaos;
-                this.color = getChaosColor(chaos);
             }
             
-            update() {
+            update(centerGravity) {
                 this.x += this.vx;
                 this.y += this.vy;
+                this.z = Math.max(0, Math.min(1, this.z + this.vz));
                 this.life -= this.decay;
+                
+                // Gravity toward chaos center
+                const dx = centerGravity.x - this.x;
+                const dy = centerGravity.y - this.y;
+                this.vx += dx * 0.001 * this.chaos / 100;
+                this.vy += dy * 0.001 * this.chaos / 100;
+                
+                // Friction
                 this.vx *= 0.98;
                 this.vy *= 0.98;
             }
             
             draw(ctx) {
-                ctx.globalAlpha = this.life;
-                ctx.fillStyle = this.color;
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = this.color;
+                const depthScale = 0.5 + this.z * 0.5;
+                const alpha = this.life * depthScale;
+                const size = this.size * depthScale;
+                
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = getParticleColor(this.chaos);
+                ctx.shadowBlur = 15 * depthScale;
+                ctx.shadowColor = ctx.fillStyle;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, size, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
@@ -193,158 +247,262 @@
         }
         
         class PulseRing {
-            constructor(x, y, chaos) {
+            constructor(x, y, chaos, depth = 0) {
                 this.x = x;
                 this.y = y;
                 this.radius = 10;
-                this.maxRadius = 100 + chaos * 0.5;
+                this.maxRadius = 100 + chaos * 0.3;
                 this.life = 1;
-                this.decay = 0.02;
-                this.color = getChaosColor(chaos);
-                this.lineWidth = 3;
+                this.decay = 0.015;
+                this.chaos = chaos;
+                this.z = depth;
+                this.lineWidth = 2 + chaos / 50;
+                this.rotation = Date.now() * 0.001;
             }
             
             update() {
-                this.radius += 3;
+                this.radius += 2 + this.chaos / 100;
                 this.life -= this.decay;
                 this.lineWidth *= 0.98;
+                this.rotation += 0.02;
             }
             
             draw(ctx) {
-                ctx.globalAlpha = this.life * 0.5;
-                ctx.strokeStyle = this.color;
-                ctx.lineWidth = this.lineWidth;
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.stroke();
+                const depthScale = 0.5 + this.z * 0.5;
+                const alpha = this.life * 0.4 * depthScale;
+                
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = getChaosColor(this.chaos);
+                ctx.lineWidth = this.lineWidth * depthScale;
+                ctx.shadowBlur = 20 * depthScale;
+                ctx.shadowColor = ctx.strokeStyle;
+                
+                // Draw rotating hexagon for chaos > 100
+                if (this.chaos > 100) {
+                    ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = this.rotation + (i * Math.PI / 3);
+                        const x = this.x + Math.cos(angle) * this.radius;
+                        const y = this.y + Math.sin(angle) * this.radius;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
                 ctx.shadowBlur = 0;
                 ctx.globalAlpha = 1;
             }
         }
         
-        function drawDynamicGrid() {
-            const time = Date.now() / 1000;
-            ctx.strokeStyle = '#112211';
-            ctx.lineWidth = 1;
-            const gridSize = 50;
-            const offset = (time * 10) % gridSize;
-            
-            for (let x = offset; x < canvas.width; x += gridSize) {
-                const wave = Math.sin((x + time * 50) / 100) * 5;
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
-                ctx.stroke();
+        class DimensionalPortal {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 0;
+                this.maxRadius = 200;
+                this.rotation = 0;
+                this.life = 1;
             }
             
-            for (let y = offset; y < canvas.height; y += gridSize) {
-                const wave = Math.cos((y + time * 30) / 100) * 5;
-                ctx.beginPath();
-                ctx.moveTo(0, y + wave);
-                ctx.lineTo(canvas.width, y + wave);
-                ctx.stroke();
+            update() {
+                if (this.radius < this.maxRadius) this.radius += 5;
+                this.rotation += 0.1;
+                this.life -= 0.001;
             }
-        }
-        
-        function drawRegions() {
-            const w = canvas.width, h = canvas.height;
-            const time = Date.now() / 1000;
             
-            // Animated regions
-            ctx.fillStyle = `rgba(0, 255, 136, ${0.05 + Math.sin(time) * 0.02})`;
-            ctx.fillRect(0, h*0.8, w*0.2, h*0.2);
-            
-            ctx.fillStyle = `rgba(255, 255, 0, ${0.05 + Math.sin(time + 1) * 0.02})`;
-            ctx.fillRect(w*0.2, h*0.6, w*0.2, h*0.25);
-            
-            ctx.fillStyle = `rgba(255, 136, 0, ${0.05 + Math.sin(time + 2) * 0.02})`;
-            ctx.fillRect(w*0.4, h*0.4, w*0.2, h*0.25);
-            
-            ctx.fillStyle = `rgba(255, 0, 136, ${0.05 + Math.sin(time + 3) * 0.02})`;
-            ctx.fillRect(w*0.6, h*0.2, w*0.2, h*0.25);
-            
-            ctx.fillStyle = `rgba(255, 0, 0, ${0.05 + Math.sin(time + 4) * 0.02})`;
-            ctx.fillRect(w*0.8, 0, w*0.2, h*0.25);
-        }
-        
-        function drawTrail() {
-            if (trajectory.length < 2) return;
-            
-            ctx.lineWidth = 3;
-            for (let i = 0; i < trajectory.length - 1; i++) {
-                const alpha = i / trajectory.length;
-                ctx.strokeStyle = `rgba(255, 0, 255, ${alpha * 0.5})`;
+            draw(ctx) {
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                gradient.addColorStop(0, 'transparent');
+                gradient.addColorStop(0.5, 'rgba(0, 255, 0, 0.2)');
+                gradient.addColorStop(1, 'transparent');
+                
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = gradient;
                 ctx.beginPath();
-                ctx.moveTo(trajectory[i].x, trajectory[i].y);
-                ctx.lineTo(trajectory[i + 1].x, trajectory[i + 1].y);
-                ctx.stroke();
-            }
-        }
-        
-        function drawChaosPoint(chaos, chat, pizza) {
-            const x = Math.min(canvas.width * 0.9, Math.max(50, 50 + logScale(chat, 1000) * canvas.width * 0.8));
-            const y = Math.min(canvas.height * 0.9, Math.max(50, canvas.height * 0.9 - logScale(pizza, 10000000000) * canvas.height * 0.8));
-            
-            // Update trajectory
-            trajectory.push({x, y, chaos, time: Date.now()});
-            if (trajectory.length > 100) trajectory.shift();
-            
-            // Check for chaos increase to spawn particles
-            if (chaos > lastChaos + 5) {
-                // Burst of particles
-                for (let i = 0; i < 20; i++) {
-                    particles.push(new Particle(x, y, chaos));
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Rotating portal rings
+                for (let i = 0; i < 3; i++) {
+                    ctx.strokeStyle = `hsl(${(Date.now() / 10 + i * 120) % 360}, 100%, 50%)`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    const r = this.radius * (0.5 + i * 0.2);
+                    for (let a = 0; a < Math.PI * 2; a += 0.1) {
+                        const x = this.x + Math.cos(a + this.rotation + i) * r;
+                        const y = this.y + Math.sin(a + this.rotation + i) * r;
+                        if (a === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.stroke();
                 }
-                // Add pulse ring
-                pulseRings.push(new PulseRing(x, y, chaos));
+                ctx.globalAlpha = 1;
+            }
+        }
+        
+        function drawDimensionalGrid(time, activity) {
+            ctx.strokeStyle = `rgba(0, 50, 0, ${0.2 + activity / 100})`;
+            ctx.lineWidth = 1;
+            
+            // Perspective grid lines
+            for (let i = -10; i <= 10; i++) {
+                const offset = i * 50 + Math.sin(time * 0.001 + i) * 10;
+                ctx.beginPath();
+                ctx.moveTo(centerX + offset * 0.2, 0);
+                ctx.lineTo(centerX + offset * 2, canvas.height);
+                ctx.stroke();
             }
             
-            // Regular particle spawn based on chaos level
-            if (Math.random() < chaos / 500) {
-                particles.push(new Particle(x, y, chaos));
+            for (let i = -5; i <= 5; i++) {
+                const y = centerY + i * 40 + Math.cos(time * 0.001 + i) * 5;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+        
+        function drawChaosPoint(dims) {
+            const { x, y, z, depth, rotation } = dims;
+            const color = getChaosColor(z);
+            const radius = 15 + z / 10;
+            
+            // Add to trajectory
+            trajectory.push({x, y, z, depth, time: Date.now()});
+            if (trajectory.length > 50) trajectory.shift();
+            
+            // Check for major chaos events
+            if (z > lastChaos + 20 && z > 100) {
+                for (let i = 0; i < 30; i++) {
+                    particles.push(new Particle(x, y, depth, z));
+                }
+                pulseRings.push(new PulseRing(x, y, z, depth));
             }
             
-            // Periodic pulse rings
-            if (Date.now() % 60 === 0) {
-                pulseRings.push(new PulseRing(x, y, chaos));
+            // Check for Fenthouse
+            if (z >= 42069 && dimensionalPortals.length === 0) {
+                dimensionalPortals.push(new DimensionalPortal(x, y));
+                document.getElementById('portalOverlay').style.display = 'block';
+            } else if (z < 42069) {
+                dimensionalPortals = [];
+                document.getElementById('portalOverlay').style.display = 'none';
             }
             
-            const color = getChaosColor(chaos);
-            const radius = chaos > 100 ? 30 : 10 + chaos / 5;
+            // Regular particle spawn
+            if (Math.random() < z / 1000) {
+                particles.push(new Particle(x, y, depth * Math.random(), z));
+            }
             
-            // Glow
-            ctx.shadowBlur = 30;
-            ctx.shadowColor = color;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
+            // Periodic pulses based on activity
+            if (frameCount % Math.max(10, 60 - Math.floor(z / 50)) === 0) {
+                pulseRings.push(new PulseRing(x, y, z, depth));
+            }
+            
+            // Draw chaos core
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(rotation);
+            
+            // Glow layers
+            for (let i = 3; i >= 0; i--) {
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.3 - i * 0.05;
+                ctx.shadowBlur = 40 + i * 10;
+                ctx.shadowColor = color;
+                ctx.beginPath();
+                if (z > 500) {
+                    // Star shape for high chaos
+                    for (let j = 0; j < 8; j++) {
+                        const angle = (j / 8) * Math.PI * 2;
+                        const r = j % 2 === 0 ? radius + i * 5 : radius * 0.5 + i * 5;
+                        const px = Math.cos(angle) * r;
+                        const py = Math.sin(angle) * r;
+                        if (j === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                    ctx.closePath();
+                } else {
+                    ctx.arc(0, 0, radius + i * 5, 0, Math.PI * 2);
+                }
+                ctx.fill();
+            }
             
             // Inner core
             ctx.fillStyle = '#fff';
+            ctx.globalAlpha = 1;
+            ctx.shadowBlur = 20;
             ctx.beginPath();
-            ctx.arc(x, y, radius * 0.4, 0, Math.PI * 2);
+            ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
             ctx.fill();
+            
+            ctx.restore();
             
             // Label
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 14px monospace';
-            ctx.fillText(`⚡${chaos.toFixed(0)}`, x + 25, y);
+            ctx.fillText(`⚡${z.toFixed(0)}`, x + 30, y);
             
-            lastChaos = chaos;
+            lastChaos = z;
             return {x, y};
         }
         
+        function drawTrajectory() {
+            if (trajectory.length < 2) return;
+            
+            for (let i = 0; i < trajectory.length - 1; i++) {
+                const p1 = trajectory[i];
+                const p2 = trajectory[i + 1];
+                const alpha = (i / trajectory.length) * 0.5;
+                const depthScale = 0.5 + p1.z * 0.5;
+                
+                ctx.strokeStyle = getChaosColor(p1.z);
+                ctx.globalAlpha = alpha;
+                ctx.lineWidth = 2 * depthScale;
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+        }
+        
         function animate() {
-            ctx.fillStyle = '#050508';
+            const time = Date.now();
+            frameCount++;
+            
+            // Fade background for trail effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            drawDynamicGrid();
-            drawRegions();
-            drawTrail();
+            let dims = { x: centerX, y: centerY, z: 0, depth: 0, rotation: 0 };
+            
+            if (lastData) {
+                dims = getChaosDimensions(
+                    lastData.chaos_score,
+                    lastData.chat_velocity_5min,
+                    lastData.door_events_10min,
+                    lastData.pizza_count,
+                    time
+                );
+                
+                const totalActivity = lastData.chat_velocity_5min + lastData.door_events_10min;
+                drawDimensionalGrid(time, totalActivity);
+                drawTrajectory();
+            }
+            
+            // Update and draw dimensional portals
+            dimensionalPortals = dimensionalPortals.filter(portal => {
+                portal.update();
+                portal.draw(ctx);
+                return portal.life > 0;
+            });
             
             // Update and draw pulse rings
             pulseRings = pulseRings.filter(ring => {
@@ -355,48 +513,43 @@
             
             // Update and draw particles
             particles = particles.filter(p => {
-                p.update();
+                p.update(dims);
                 p.draw(ctx);
                 return p.life > 0;
             });
             
             // Draw chaos point
-            if (lastData) {
-                drawChaosPoint(lastData.chaos_score, lastData.chat_velocity_5min, lastData.pizza_count);
-            }
+            drawChaosPoint(dims);
             
-            // Update particle count display
-            document.getElementById('particleCount').textContent = particles.length;
+            // Update displays
+            document.getElementById('particleCount').textContent = 
+                particles.length + pulseRings.length + dimensionalPortals.length;
             
-            animationId = requestAnimationFrame(animate);
+            requestAnimationFrame(animate);
         }
         
         function updateMetrics() {
             if (!lastData) return;
             
             const chaos = lastData.chaos_score;
-            const chaosClass = getChaosClass(chaos);
             
             document.getElementById('chaosVal').textContent = chaos.toFixed(1);
-            document.getElementById('chaosVal').className = 'metric-value ' + (chaosClass === 'fent' ? 'fent' : chaos > 80 ? 'flood' : '');
+            document.getElementById('chaosVal').className = 'metric-value ' + 
+                (chaos >= 42069 ? 'fent' : chaos > 80 ? 'flood' : '');
+            
+            // Calculate dimensional metrics
+            const flow = lastData.chat_velocity_5min + lastData.door_events_10min;
+            const density = lastData.pizza_count + lastData.glizz_count + lastData.dong_count;
+            const depth = trajectory.length;
+            
+            document.getElementById('velocityVal').textContent = flow;
+            document.getElementById('densityVal').textContent = density > 1000 ? (density/1000).toFixed(1) + 'k' : density;
+            document.getElementById('depthVal').textContent = depth;
+            
             document.getElementById('chat5Val').textContent = lastData.chat_velocity_5min;
             document.getElementById('door10Val').textContent = lastData.door_events_10min;
-            document.getElementById('pizzaVal').textContent = lastData.pizza_count > 1000000 ? (lastData.pizza_count / 1000000).toFixed(1) + 'M' : lastData.pizza_count;
-            
-            if (trajectory.length > 1) {
-                const recent = trajectory.slice(-10);
-                const dx = recent[recent.length - 1].x - recent[0].x;
-                const dy = recent[recent.length - 1].y - recent[0].y;
-                const velocity = Math.sqrt(dx*dx + dy*dy) * 10; // Scale up for visibility
-                document.getElementById('velocityVal').textContent = velocity.toFixed(1);
-                
-                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                let arrow = '→';
-                if (angle > 45 && angle < 135) arrow = '↓';
-                else if (angle >= 135 || angle < -135) arrow = '←';
-                else if (angle >= -135 && angle < -45) arrow = '↑';
-                document.getElementById('directionVal').textContent = arrow;
-            }
+            document.getElementById('pizzaVal').textContent = lastData.pizza_count;
+            document.getElementById('glizzVal').textContent = lastData.glizz_count;
         }
         
         async function fetchMetrics() {

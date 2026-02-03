@@ -39,7 +39,17 @@
             opacity: 0.7;
         }
         
-        /* Layer 3: UI overlay */
+        /* Layer 3: Fluid Goo Simulation */
+        #fluid-layer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 12;
+            mix-blend-mode: hard-light;
+            pointer-events: none;
+        }
+        
+        /* Layer 4: UI overlay */
         #ui-layer {
             position: fixed;
             top: 0; left: 0;
@@ -118,7 +128,10 @@
     <!-- LAYER 2: RGB Smoke with multiply blend -->
     <canvas id="smoke-layer"></canvas>
     
-    <!-- LAYER 3: UI -->
+    <!-- LAYER 3: Fluid Goo Simulation -->
+    <canvas id="fluid-layer"></canvas>
+    
+    <!-- LAYER 4: UI -->
     <div id="ui-layer">
         <button id="quality-btn" onclick="toggleQuality()">QUALITY: HIGH</button>
         
@@ -474,6 +487,208 @@
         }
         
         let rgbSmoke;
+        let fluidGoo;
+        
+        // ========== FLUID GOO SIMULATION ==========
+        // Bright colored particles that fall, collect at bottom, and drain at center
+        class FluidGoo {
+            constructor() {
+                this.fluidCanvas = document.getElementById('fluid-layer');
+                this.fCtx = this.fluidCanvas.getContext('2d');
+                this.particles = [];
+                this.splashes = []; // Burst effects at drain
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                // Spawn rate
+                this.spawnTimer = 0;
+                this.spawnRate = 3; // Particles per frame
+            }
+            
+            resize() {
+                const scale = quality === 'low' ? 0.5 : (quality === 'medium' ? 0.75 : 1);
+                this.fw = this.fluidCanvas.width = window.innerWidth * scale;
+                this.fh = this.fluidCanvas.height = window.innerHeight * scale;
+                this.fluidCanvas.style.width = '100vw';
+                this.fluidCanvas.style.height = '100vh';
+            }
+            
+            spawnParticle() {
+                // Random bright colors across RGB spectrum
+                const channelMix = Math.random();
+                let r, g, b;
+                
+                if (channelMix < 0.33) {
+                    // Cyan/teal range
+                    r = 0;
+                    g = 200 + Math.random() * 55;
+                    b = 255;
+                } else if (channelMix < 0.66) {
+                    // Magenta/purple range
+                    r = 255;
+                    g = 0;
+                    b = 100 + Math.random() * 155;
+                } else {
+                    // Lime/yellow range
+                    r = 100 + Math.random() * 155;
+                    g = 255;
+                    b = 0;
+                }
+                
+                this.particles.push({
+                    x: Math.random() * this.fw,
+                    y: -20,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: Math.random() * 3 + 2,
+                    size: Math.random() * 8 + 4,
+                    r: r,
+                    g: g,
+                    b: b,
+                    alpha: 1,
+                    state: 'falling', // 'falling', 'sliding', 'drain'
+                    drainProgress: 0
+                });
+            }
+            
+            createSplash(x, y, r, g, b) {
+                // Create burst particles
+                for (let i = 0; i < 12; i++) {
+                    this.splashes.push({
+                        x: x,
+                        y: y,
+                        vx: (Math.random() - 0.5) * 15,
+                        vy: (Math.random() - 0.5) * 15 - 5,
+                        size: Math.random() * 6 + 3,
+                        r: r,
+                        g: g,
+                        b: b,
+                        life: 1,
+                        decay: 0.03 + Math.random() * 0.03
+                    });
+                }
+            }
+            
+            updateAndDraw() {
+                this.fCtx.globalCompositeOperation = 'hard-light';
+                
+                // Soft clear - leave trails
+                this.fCtx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+                this.fCtx.fillRect(0, 0, this.fw, this.fh);
+                
+                // Spawn new particles
+                this.spawnTimer++;
+                for (let i = 0; i < this.spawnRate; i++) {
+                    if (Math.random() < 0.8) this.spawnParticle();
+                }
+                
+                const drainX = this.fw / 2;
+                const bottomZone = this.fh - 80;
+                const drainRange = 30; // Pixel range where particles drain
+                
+                // Update and draw goo particles
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    
+                    if (p.state === 'falling') {
+                        // Apply gravity and move
+                        p.vy += 0.3; // gravity
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        
+                        // Air resistance
+                        p.vx *= 0.99;
+                        p.vy *= 0.995;
+                        
+                        // Floor collision - start sliding
+                        if (p.y > bottomZone) {
+                            p.y = bottomZone;
+                            p.vy = 0;
+                            p.state = 'sliding';
+                        }
+                    } else if (p.state === 'sliding') {
+                        // Move toward center drain
+                        const dx = drainX - p.x;
+                        const dist = Math.abs(dx);
+                        
+                        if (dist < drainRange) {
+                            // Close to drain, start draining
+                            p.state = 'drain';
+                            p.vx = dx * 0.1; // Slight slide into drain
+                        } else {
+                            // Slide toward center
+                            const slideSpeed = Math.min(6, dist * 0.05);
+                            p.vx = (dx > 0 ? slideSpeed : -slideSpeed);
+                            p.x += p.vx;
+                            
+                            // Slight wobble for liquid effect
+                            p.y += Math.sin(time * 5 + p.x * 0.1) * 0.5;
+                        }
+                    } else if (p.state === 'drain') {
+                        // Swirl down the drain
+                        p.drainProgress += 0.08;
+                        
+                        // Spiral into drain
+                        const angle = p.drainProgress * 3;
+                        const radius = Math.max(0, 20 * (1 - p.drainProgress));
+                        p.x = drainX + Math.cos(angle) * radius;
+                        p.y = bottomZone + Math.sin(angle) * radius + p.drainProgress * 20;
+                        
+                        // Shrink and fade
+                        p.size *= 0.95;
+                        p.alpha = 1 - p.drainProgress;
+                        
+                        // Create splash when fully drained
+                        if (p.drainProgress >= 1 || p.alpha <= 0) {
+                            this.createSplash(drainX, bottomZone + 20, p.r, p.g, p.b);
+                            this.particles.splice(i, 1);
+                            continue;
+                        }
+                    }
+                    
+                    // Draw goo particle with glow
+                    if (p.size > 0.5) {
+                        // Glow effect
+                        const glow = this.fCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+                        glow.addColorStop(0, `rgba(${p.r}, ${p.g}, ${p.b}, ${p.alpha * 0.8})`);
+                        glow.addColorStop(0.5, `rgba(${p.r}, ${p.g}, ${p.b}, ${p.alpha * 0.3})`);
+                        glow.addColorStop(1, `rgba(${p.r}, ${p.g}, ${p.b}, 0)`);
+                        
+                        this.fCtx.fillStyle = glow;
+                        this.fCtx.beginPath();
+                        this.fCtx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+                        this.fCtx.fill();
+                        
+                        // Core
+                        this.fCtx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${p.alpha})`;
+                        this.fCtx.beginPath();
+                        this.fCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        this.fCtx.fill();
+                    }
+                }
+                
+                // Update and draw splash bursts
+                for (let i = this.splashes.length - 1; i >= 0; i--) {
+                    const s = this.splashes[i];
+                    s.x += s.vx;
+                    s.y += s.vy;
+                    s.vy += 0.5; // gravity
+                    s.life -= s.decay;
+                    
+                    if (s.life <= 0) {
+                        this.splashes.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // Draw splash particle
+                    this.fCtx.fillStyle = `rgba(${s.r}, ${s.g}, ${s.b}, ${s.life})`;
+                    this.fCtx.beginPath();
+                    this.fCtx.arc(s.x, s.y, s.size * s.life, 0, Math.PI * 2);
+                    this.fCtx.fill();
+                }
+                
+                this.fCtx.globalCompositeOperation = 'source-over';
+            }
+        }
         
         function initParticles() {
             particles = [];
@@ -482,6 +697,7 @@
             kaleidoscope = new KaleidoscopeEffect();
             liquidPlasma = new LiquidPlasmaEffect();
             rgbSmoke = new RGBSmoke();
+            fluidGoo = new FluidGoo();
             const pc = quality === 'low' ? 10 : (quality === 'medium' ? 20 : 35);
             const sc = quality === 'low' ? 1 : (quality === 'medium' ? 2 : 3);
             for (let i = 0; i < pc; i++) particles.push(new Particle());
@@ -495,6 +711,7 @@
         toggleQuality = function() {
             originalToggleQuality();
             if (rgbSmoke) rgbSmoke.resize();
+            if (fluidGoo) fluidGoo.resize();
         };
         
         function animate(now) {
@@ -528,6 +745,9 @@
             
             // RGB SMOKE LAYER (multiply blend)
             if (rgbSmoke) rgbSmoke.updateAndDraw();
+            
+            // FLUID GOO SIMULATION (hard-light blend)
+            if (fluidGoo) fluidGoo.updateAndDraw();
         }
         animate(0);
         

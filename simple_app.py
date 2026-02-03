@@ -544,9 +544,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
         elif path == '/api/indexer-stats':
             self.serve_indexer_stats()
         elif path == '/coverage':
-            self.serve_coverage()
-        elif path == '/api/indexer-coverage':
-            self.serve_indexer_coverage()
+            # Temporarily disabled - rebuilding with better performance
+            self.send_json({'error': 'Coverage endpoint rebuilding for performance - check back in 5 min'})
         else:
             self.send_error(404)
 

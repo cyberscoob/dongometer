@@ -245,7 +245,7 @@ def get_cached_glizz_count():
     return _glizz_cache['count'] or 0
 
 def get_dong_metrics():
-    """Get dong count from MongoDB indexer - tracks donghouse culture/energy"""
+    """Get dong count from MongoDB indexer - tracks CClub culture/energy"""
     try:
         import subprocess
         import json
@@ -373,12 +373,12 @@ def get_cached_dong_analytics(all_time=False):
     return _dong_analytics_cache[cache_key] or {}
 
 def get_favorite_word():
-    """Find CClub's favorite word (most mentioned non-stop word in donghouse room)"""
+    """Find CClub's favorite word (most mentioned non-stop word across all rooms)"""
     try:
         import subprocess
         import json
         
-        # Query for top words specific to the donghouse room
+        # Query for top words across all CClub rooms
         stopWordsFull = ["the", "a", "to", "and", "of", "i", "is", "in", "you", "it", "for", "on", "or", "not", "are", "an", "as", "but", "can", "at", "me", "my", "by", "do", "we", "he", "if", "all", "be", "was", "has", "had", "did", "get", "use", "way", "its", "who", "now", "how", "why", "too", "very", "much", "many", "also", "here", "there", "where", "when", "what", "which", "their", "them", "they", "these", "those", "this", "that", "then", "than", "only", "other", "some", "more", "most", "such", "no", "each", "few", "one", "two", "three", "first", "next", "well", "own", "same", "so", "than", "she", "her", "his", "him", "our", "ours", "your", "yours", "hers", "theirs", "myself", "yourself", "himself", "herself", "itself", "ourselves", "yourselves", "themselves", "any", "both", "nor", "will", "would", "could", "should", "may", "might", "must", "shall", "dont", "wont", "cant", "shouldnt", "couldnt", "wouldnt", "wasnt", "werent", "arent", "isnt", "doesnt", "didnt", "hasnt", "havent", "hadnt", "thats", "whats", "wheres", "whens", "whos", "heres", "shes", "hes", "theres", "theyre", "youre", "im", "ive", "youve", "weve", "theyve", "id", "youd", "hed", "shed", "wed", "theyd", "doing", "done", "got", "gotten", "go", "goes", "going", "went", "come", "came", "comes", "coming", "see", "saw", "seen", "sees", "seeing", "knew", "known", "knows", "knowing", "thought", "thinks", "thinking", "looked", "looks", "looking", "made", "makes", "making", "wanted", "wants", "wanting", "gave", "given", "gives", "giving", "used", "uses", "using", "found", "finds", "finding", "told", "tells", "telling", "asked", "asks", "asking", "seemed", "seems", "seeming", "felt", "feels", "feeling", "became", "becomes", "becoming", "left", "leaves", "leaving", "called", "calls", "calling", "good", "great", "right", "old", "little", "big", "high", "different", "small", "large", "early", "young", "important", "public", "private", "able", "with", "like", "have", "about", "from", "up", "down", "out", "over", "under", "again", "further", "then", "once", "here", "there", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "just", "now", "also", "back", "still", "even", "again", "already", "yet", "always", "never", "sometimes", "often", "usually", "really", "actually", "probably", "maybe", "perhaps", "though", "although", "while", "since", "until", "unless", "although", "despite", "however", "therefore", "thus", "otherwise", "instead", "meanwhile", "furthermore", "moreover", "nevertheless", "nonetheless", "anyway", "besides", "except", "regarding", "concerning", "according", "due", "regardless", "notwithstanding", "https", "http", "www", "com", "org", "net", "io", "dev"]
         
         # Build query without f-string to avoid brace escaping issues
@@ -386,7 +386,7 @@ def get_favorite_word():
         query = '''
         var stopWords = ''' + stop_words_json + ''';
         var pipeline = [
-          {$match: {"room_id": "!RfkQkxlYocxeqmrBXI:cclub.cs.wmich.edu", "content.body": {$exists: true, $ne: ""}}},
+          {$match: {"content.body": {$exists: true, $ne: ""}}},
           {$project: {words: {$split: ["$content.body", " "]}}},
           {$unwind: "$words"},
           {$match: {"words": {$regex: "^[a-zA-Z]+$"}}},
@@ -619,7 +619,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
         # Determine status based on UNLIMITED chaos score
         if status is None:
             if score <= 20:
-                status = '😴 CALM - The donghouse sleeps'
+                status = '😴 CALM - CClub sleeps'
             elif score <= 40:
                 status = '⚡ ACTIVE - Normal operations'
             elif score <= 60:
@@ -627,9 +627,9 @@ class DongometerHandler(BaseHTTPRequestHandler):
             elif score <= 80:
                 status = '👿 DEMONIC - Hardin needs a grader'
             elif score <= 100:
-                status = '☠️ APOCALYPTIC - Gigglesgate 2.0'
+                status = '☠️ APOCALYPSE - Gigglesgate 2.0'
             elif score <= 200:
-                status = '🔥 TRUE APOCALYPSE - The donghouse is no more'
+                status = '🔥 TRUE APOCALYPSE - CClub is no more'
             elif score <= 500:
                 status = '🌌 COSMIC HORROR - Physics has left the building'
             elif score <= 1000:

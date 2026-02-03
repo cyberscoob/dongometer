@@ -834,7 +834,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def serve_indexer_coverage(self):
-        """Serve timeline coverage data for top 10 rooms in 30-day buckets"""
+        """Serve timeline coverage data for top 10 rooms in 7-day buckets"""
         try:
             import subprocess
             import json
@@ -882,14 +882,14 @@ class DongometerHandler(BaseHTTPRequestHandler):
             # Find global_start (earliest event across all rooms)
             global_start = min(r['first_event'] for r in rooms)
 
-            # For each room, create 30-day buckets and sample for coverage
-            BUCKET_MS = 30 * 24 * 60 * 60 * 1000  # 30 days in milliseconds
+            # For each room, create 7-day buckets and sample for coverage
+            BUCKET_MS = 7 * 24 * 60 * 60 * 1000  # 7 days in milliseconds
 
             for room in rooms:
                 first_ts = room['first_event']
                 last_ts = room['last_event']
 
-                # Generate segments with 30-day buckets
+                # Generate segments with 7-day buckets
                 segments = []
                 current = first_ts - (first_ts % BUCKET_MS)  # Round down to bucket boundary
                 end_bound = last_ts + BUCKET_MS  # Extend slightly past last event

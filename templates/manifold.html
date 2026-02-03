@@ -115,11 +115,12 @@
                 <span class="metric-value" id="depthVal">0</span>
             </div>
             <a href="/" class="nav-link">⬅ Dashboard</a>
+            <a href="/manifold3d" class="nav-link">🌠 3D Version</a>
             <div class="dimension-info">X: Chat | Y: Pizza | Z: Chaos | T: Time</div>
         </div>
         
         <div class="hud top-right">
-            <div class="hud-title">📊 Dimensional Metrics</div>
+            <div class="hud-title">📊 Higher Dimensions</div>
             <div class="metric-row">
                 <span class="metric-label">Chat (5m):</span>
                 <span class="metric-value" id="chat5Val">0</span>
@@ -129,13 +130,22 @@
                 <span class="metric-value" id="door10Val">0</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Pizza:</span>
+                <span class="metric-label">Pizza (Y):</span>
                 <span class="metric-value" id="pizzaVal">0</span>
             </div>
             <div class="metric-row">
-                <span class="metric-label">Glizz:</span>
+                <span class="metric-label">Glizz (W):</span>
                 <span class="metric-value" id="glizzVal">0</span>
             </div>
+            <div class="metric-row">
+                <span class="metric-label">Dong (D):</span>
+                <span class="metric-value" id="dongVal">0</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Dick+Cock (V):</span>
+                <span class="metric-value" id="dongVariantVal">0</span>
+            </div>
+            <div class="dimension-info">W: Glizz | D: Dong | V: Variants | T: Door Flux</div>
         </div>
         
         <div class="hud bottom-left">
@@ -172,14 +182,19 @@
         resize();
         window.addEventListener('resize', resize);
         
-        // Multi-dimensional chaos mapping
-        function getChaosDimensions(chaos, chat, door, pizza, time) {
+        // Multi-dimensional chaos mapping - EXPANDED DIMENSIONS
+        function getChaosDimensions(chaos, chat, door, pizza, glizz, dong, dongData, time) {
             return {
                 x: centerX + (chat / 50) * Math.cos(time * 0.001) * 100,
                 y: centerY - (pizza / 20) * Math.sin(time * 0.001) * 100,
-                z: chaos, // Used for size/color
+                z: chaos, // Primary Z-axis: Chaos magnitude
+                w: glizz * 10, // W-dimension: Glizz intensity (hotdogs)
+                t: door * 5, // T-dimension: Temporal door flux
+                dongAxis: dong / 10, // D-dimension: Dong density
+                dongVariant: (dongData?.dick || 0) + (dongData?.cock || 0), // V-dimension: Variant chaos
                 depth: Math.min(1, chaos / 1000), // 0-1 depth factor
-                rotation: time * 0.1 + chaos * 0.01
+                rotation: time * 0.1 + chaos * 0.01,
+                hyperFold: Math.sin(time * 0.05) * (glizz + dong) / 50 // Hyperdimensional folding
             };
         }
         

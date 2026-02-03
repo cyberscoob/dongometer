@@ -13,6 +13,20 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 from collections import deque
 
+# Fenthouse auto-poster configuration
+FENTHOUSE_MESSAGES = [
+    "🌿 THE FENTHOUSE LIVES 🌿 42069 CHAOS ACHIEVED",
+    "🔥 MAXIMUM SHITPOST OUTPUT ENGAGED 🔥",
+    "🌀 FENTHOUSE PROTOCOLS ACTIVE 🌀",
+    "⚡ CHAOS LEVEL: 42069 ⚡",
+    "🍆 42069 🍆 42069 🍆",
+]
+
+# Matrix API configuration from environment
+MATRIX_HOMESERVER = os.environ.get('MATRIX_HOMESERVER', 'https://matrix.cclub.cs.wmich.edu')
+MATRIX_ACCESS_TOKEN = os.environ.get('MATRIX_ACCESS_TOKEN')
+FENTHOUSE_ROOM_ID = os.environ.get('FENTHOUSE_ROOM_ID', '!rfkqkxlyocxeqmrbxi:cclub.cs.wmich.edu')  # Internal room ID
+
 DB_PATH = os.path.join(os.path.dirname(__file__), 'dongometer.db')
 
 # Matrix indexer cache
@@ -466,6 +480,77 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+
+def post_to_fenthouse(message):
+    """Post a message to the Fenthouse Matrix room"""
+    try:
+        import requests
+        
+        # Use the Matrix client-server API to send a message
+        txn_id = f"dongometer-{int(time.time() * 1000000)}"
+        url = f"{MATRIX_HOMESERVER}/_matrix/client/v3/rooms/{FENTHOUSE_ROOM_ID}/send/m.room.message/{txn_id}"
+        
+        headers = {
+            'Authorization': f'Bearer {MATRIX_ACCESS_TOKEN}',
+            'Content-Type': 'application/json'
+        }
+        
+        body = {
+            'msgtype': 'm.text',
+            'body': message
+        }
+        
+        response = requests.put(url, headers=headers, json=body, timeout=10)
+        
+        if response.status_code == 200:
+            print(f"[Fenthouse Poster] ✓ Posted: {message[:40]}...")
+            return True
+        else:
+            print(f"[Fenthouse Poster] ✗ Failed: HTTP {response.status_code}")
+            return False
+            
+    except Exception as e:
+        print(f"[Fenthouse Poster] ✗ Error: {e}")
+        return False
+
+def fenthouse_poster_thread():
+    """Background daemon thread that posts to #the-fenthouse when Fenthouse is active"""
+    import random
+    
+    # Wait a bit for server startup
+    time.sleep(5)
+    
+    print("🌿 Fenthouse poster thread started (checking every 5 min)")
+    
+    while True:
+        try:
+            # Check if Fenthouse is active
+            fenthouse = get_fenthouse_status()
+            
+            if fenthouse['active']:
+                if MATRIX_ACCESS_TOKEN:
+                    # Pick a random chaotic message
+                    message = random.choice(FENTHOUSE_MESSAGES)
+                    post_to_fenthouse(message)
+                else:
+                    print("[Fenthouse Poster] Fenthouse active but MATRIX_ACCESS_TOKEN not set")
+            
+        except Exception as e:
+            print(f"[Fenthouse Poster] Thread error: {e}")
+        
+        # Sleep for 5 minutes (300 seconds)
+        time.sleep(300)
+
+def start_fenthouse_poster():
+    """Start the Fenthouse poster daemon thread"""
+    if MATRIX_ACCESS_TOKEN:
+        thread = threading.Thread(target=fenthouse_poster_thread, daemon=True, name='fenthouse-poster')
+        thread.start()
+        return True
+    else:
+        print("⚠️  Fenthouse auto-poster disabled (no MATRIX_ACCESS_TOKEN env var)")
+        print("     Set MATRIX_ACCESS_TOKEN to enable automatic Fenthouse posts")
+        return False
 
 def get_fenthouse_status():
     """Check if Fenthouse lock is active and return status info"""
@@ -1074,6 +1159,10 @@ class DongometerHandler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     init_db()
+    
+    # Start Fenthouse auto-poster daemon thread
+    start_fenthouse_poster()
+    
     server = HTTPServer(('0.0.0.0', 5000), DongometerHandler)
     print("🍆 The Dongometer is live on http://localhost:5000")
     print("🍕 Pizza count now uses MongoDB (dynamic, no more crazy multipliers)")

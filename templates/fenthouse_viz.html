@@ -74,6 +74,22 @@
             padding: 10px 30px; border-radius: 30px;
             color: #0f0; font-size: 16px;
         }
+        
+        /* DVD BOUNCER TIMER */
+        #dvd-timer {
+            position: fixed;
+            padding: 15px 25px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #0f0;
+            border-radius: 10px;
+            color: #0f0;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 25;
+            white-space: nowrap;
+            animation: rainbow-border 2s linear infinite;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
         #quality-btn {
             position: fixed; top: 20px; left: 20px;
             background: rgba(0,0,0,0.8); border: 1px solid #0f0; color: #0f0;
@@ -103,6 +119,9 @@
         </div>
         
         <div id="movie-info" style="display:none;"></div>
+        
+        <!-- DVD BOUNCER TIMER -->
+        <div id="dvd-timer" style="display:none;">🔒 00:00:00</div>
     </div>
 
     <script>
@@ -391,10 +410,12 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
             ctx.fillRect(0, 0, width, height);
             
-            // 3 CRAZY SHADER EFFECTS
-            rgbShift.update(); rgbShift.draw();
-            kaleidoscope.update(); kaleidoscope.draw();
-            liquidPlasma.update(); liquidPlasma.draw();
+            // 3 CRAZY SHADER EFFECTS - MAX INTENSITY
+            for (let i = 0; i < 2; i++) { // Double render for intensity
+                rgbShift.update(); rgbShift.draw();
+                kaleidoscope.update(); kaleidoscope.draw();
+                liquidPlasma.update(); liquidPlasma.draw();
+            }
             
             // Original effects
             spirals.forEach(s => { s.update(); s.draw(); });
@@ -446,6 +467,74 @@
             }
         }
         
+        // DVD BOUNCER TIMER - bounces around like old DVD screensaver
+        class DVDBouncer {
+            constructor() {
+                this.el = document.getElementById('dvd-timer');
+                this.x = Math.random() * (window.innerWidth - 200);
+                this.y = Math.random() * (window.innerHeight - 100);
+                this.vx = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+                this.vy = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+                this.hue = 0;
+                this.visible = false;
+            }
+            
+            update() {
+                if (!this.visible) return;
+                
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Bounce off walls
+                const w = window.innerWidth - this.el.offsetWidth;
+                const h = window.innerHeight - this.el.offsetHeight;
+                
+                if (this.x <= 0 || this.x >= w) {
+                    this.vx *= -1;
+                    this.x = Math.max(0, Math.min(this.x, w));
+                    this.hue = (this.hue + 60) % 360; // Change color on bounce
+                    this.el.style.borderColor = `hsl(${this.hue}, 100%, 50%)`;
+                    this.el.style.boxShadow = `0 0 30px hsla(${this.hue}, 100%, 50%, 0.5)`;
+                    this.el.style.color = `hsl(${this.hue}, 100%, 70%)`;
+                }
+                if (this.y <= 0 || this.y >= h) {
+                    this.vy *= -1;
+                    this.y = Math.max(0, Math.min(this.y, h));
+                    this.hue = (this.hue + 60) % 360;
+                    this.el.style.borderColor = `hsl(${this.hue}, 100%, 50%)`;
+                    this.el.style.boxShadow = `0 0 30px hsla(${this.hue}, 100%, 50%, 0.5)`;
+                    this.el.style.color = `hsl(${this.hue}, 100%, 70%)`;
+                }
+                
+                this.el.style.left = this.x + 'px';
+                this.el.style.top = this.y + 'px';
+                this.el.style.transform = 'none';
+            }
+            
+            setTime(hours, minutes, seconds) {
+                this.el.textContent = `🔒 ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+            }
+            
+            show() {
+                this.visible = true;
+                this.el.style.display = 'block';
+            }
+            
+            hide() {
+                this.visible = false;
+                this.el.style.display = 'none';
+            }
+        }
+        
+        const dvdBouncer = new DVDBouncer();
+        
+        // Animate the bouncer
+        function animateBouncer() {
+            dvdBouncer.update();
+            requestAnimationFrame(animateBouncer);
+        }
+        animateBouncer();
+        
         // Check Fenthouse status
         async function check() {
             try {
@@ -459,10 +548,12 @@
                     document.getElementById('active-overlay').style.display = 'none';
                 }
                 
-                if (data.fenthouse_countdown && !videoPlayer) {
+                if (data.fenthouse_countdown) {
                     const c = data.fenthouse_countdown;
                     document.getElementById('countdown').textContent = 
                         `🔒 ${c.hours}h ${c.minutes}m ${c.seconds}s`;
+                    dvdBouncer.setTime(c.hours, c.minutes, c.seconds);
+                    dvdBouncer.show();
                 }
             } catch (e) {}
         }
@@ -472,6 +563,7 @@
         // Start on click
         document.getElementById('start-screen').addEventListener('click', async function() {
             this.style.display = 'none';
+            dvdBouncer.show();
             // Start with random movie
             const randomIdx = Math.floor(Math.random() * Math.max(1, MOVIES.length || 64));
             await playMovie(randomIdx);

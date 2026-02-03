@@ -662,6 +662,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_movies()
         elif path == '/api/movie-stream':
             self.serve_movie_stream()
+        elif path == '/api/stream':
+            self.serve_youtube_stream()
         elif path == '/movie-player':
             self.serve_movie_player()
         else:
@@ -744,6 +746,95 @@ class DongometerHandler(BaseHTTPRequestHandler):
                 'stream_url': movie['url'],
                 'type': 'archive_org'
             })
+
+    def serve_youtube_stream(self):
+        """Stream YouTube video through proxy (for WebGL CORS access)"""
+        import subprocess
+        from urllib.request import Request, urlopen
+        from urllib.error import URLError
+        
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        video_id = params.get('id', [''])[0]
+        
+        if not video_id:
+            self.send_json({'error': 'No video ID provided'})
+            return
+        
+        try:
+            # Use yt-dlp to get direct video URL
+            yt_dlp_path = '/tmp/yt-dlp'
+            youtube_url = f'https://www.youtube.com/watch?v={video_id}'
+            
+            result = subprocess.run(
+                [yt_dlp_path, '-f', 'best[height<=720]', '--get-url', youtube_url],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if result.returncode != 0:
+                print(f"yt-dlp error: {result.stderr}")
+                self.send_json({'error': 'Failed to get video stream URL'})
+                return
+            
+            direct_url = result.stdout.strip().split('\n')[0]
+            if not direct_url:
+                self.send_json({'error': 'No video stream URL found'})
+                return
+            
+            # Stream the video with range request support using urllib
+            headers = {}
+            range_header = self.headers.get('Range')
+            if range_header:
+                headers['Range'] = range_header
+            
+            # Forward request to YouTube CDN
+            req = Request(direct_url, headers=headers)
+            resp = urlopen(req, timeout=30)
+            
+            # Send response
+            status_code = 206 if range_header and resp.getcode() == 206 else 200
+            self.send_response(status_code)
+            
+            # Forward important headers
+            content_type = resp.headers.get('Content-Type', 'video/mp4')
+            self.send_header('Content-Type', content_type)
+            
+            content_length = resp.headers.get('Content-Length')
+            if content_length:
+                self.send_header('Content-Length', content_length)
+            content_range = resp.headers.get('Content-Range')
+            if content_range:
+                self.send_header('Content-Range', content_range)
+            accept_ranges = resp.headers.get('Accept-Ranges')
+            if accept_ranges:
+                self.send_header('Accept-Ranges', accept_ranges)
+            
+            # CORS headers so WebGL can use the video
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Headers', 'Range')
+            self.end_headers()
+            
+            # Stream the response
+            chunk_size = 64 * 1024
+            bytes_sent = 0
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                bytes_sent += len(chunk)
+                # Flush periodically to avoid buffering
+                if bytes_sent % (256 * 1024) == 0:
+                    self.wfile.flush()
+                    
+        except subprocess.TimeoutExpired:
+            self.send_json({'error': 'Timeout getting video URL'})
+        except URLError as e:
+            print(f"URL error streaming video: {e}")
+            self.send_json({'error': 'Failed to stream video'})
+        except Exception as e:
+            print(f"Streaming error: {e}")
+            self.send_json({'error': str(e)})
 
     def serve_movie_player(self):
         """Serve a standalone movie player page"""

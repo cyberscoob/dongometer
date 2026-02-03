@@ -1054,7 +1054,7 @@
             setTimeout(() => playMovie((idx + 1) % MOVIES.length), 500);
         };
         
-        video.src = currentMovie.url;
+        video.src = '/api/stream?id=' + currentMovie.id;
         
         try {
             await video.play();

@@ -3,247 +3,174 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌿 FENTHOUSE MODE 🌿 | Psychedelic Chaos Visualization</title>
+    <title>🌿 FENTHOUSE MODE 🌿</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #000;
-            overflow: hidden;
-            font-family: 'Courier New', monospace;
-        }
-        #canvas {
+        body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+        
+        /* Layer 0: Video base */
+        #movie-layer {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-            mix-blend-mode: screen; /* ADDITIVE BLEND with video below */
-            pointer-events: none;
-        }
-        #video-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             z-index: 0;
             object-fit: cover;
-            opacity: 0;
-            transition: opacity 0.5s;
         }
-        #video-bg.visible {
-            opacity: 1;
-        }
-        #base-layer {
+        
+        /* Layer 1: Psychedelic canvas on top */
+        #psychedelic-layer {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            background: #000;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 10;
+            mix-blend-mode: screen;
+            pointer-events: none;
         }
+        
+        /* Layer 2: UI overlay */
+        #ui-layer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 20;
+            pointer-events: none;
+        }
+        
         #start-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #1a0f0a 0%, #0f1a0f 50%, #0a0f1a 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            cursor: pointer;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1a0f0a, #0f1a0f, #0a0f1a);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; cursor: pointer; pointer-events: auto;
         }
         .fenthouse-text {
-            font-size: 80px;
-            font-weight: bold;
-            text-transform: uppercase;
+            font-size: 80px; font-weight: bold; text-transform: uppercase;
             animation: rainbow 0.5s linear infinite, shake 0.1s ease-in-out infinite;
             text-shadow: -5px 0 #ff0000, 5px 0 #00ffff, 0 0 30px currentColor;
             letter-spacing: 15px;
-            pointer-events: none;
         }
         .overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             text-align: center;
-            pointer-events: none;
-            z-index: 10;
         }
         .chaos-number {
-            font-size: 140px;
-            font-weight: bold;
-            margin-top: 20px;
-            animation: rainbow 0.7s linear infinite, hyper-pulse 0.3s ease-in-out infinite;
+            font-size: 140px; font-weight: bold; margin-top: 20px;
+            animation: rainbow 0.7s linear infinite, pulse 0.3s ease-in-out infinite;
             text-shadow: -8px 0 #ff0000, 8px 0 #00ffff, 0 0 50px currentColor;
-        }
-        .status-bar {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 30px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #0f0;
-            border-radius: 30px;
-            color: #0f0;
-            font-size: 18px;
-            animation: rainbow-border 2s linear infinite;
-        }
-        .quality-toggle {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid #0f0;
-            color: #0f0;
-            padding: 10px;
-            cursor: pointer;
-            font-family: inherit;
         }
         @keyframes rainbow {
             0% { color: #ff0000; } 16% { color: #ff8800; } 33% { color: #ffff00; }
             50% { color: #00ff00; } 66% { color: #0088ff; } 83% { color: #8800ff; } 100% { color: #ff0000; }
         }
-        @keyframes rainbow-border {
-            0% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; } 16% { border-color: #ff8800; box-shadow: 0 0 20px #ff8800; }
-            33% { border-color: #ffff00; box-shadow: 0 0 20px #ffff00; } 50% { border-color: #00ff00; box-shadow: 0 0 20px #00ff00; }
-            66% { border-color: #0088ff; box-shadow: 0 0 20px #0088ff; } 83% { border-color: #8800ff; box-shadow: 0 0 20px #8800ff; }
-            100% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
-        }
         @keyframes shake {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); } 25% { transform: translate(-4px, 2px) rotate(-2deg); }
-            50% { transform: translate(4px, -2px) rotate(2deg); } 75% { transform: translate(-2px, 4px) rotate(-1deg); }
+            0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-4px, 2px); }
+            50% { transform: translate(4px, -2px); } 75% { transform: translate(-2px, 4px); }
         }
-        @keyframes hyper-pulse {
-            0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.1); filter: brightness(1.3); }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        
+        #movie-info {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); border: 1px solid #0f0; 
+            padding: 10px 30px; border-radius: 30px;
+            color: #0f0; font-size: 16px;
         }
-        .inactive-message {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            text-align: center; color: #666; font-size: 24px; display: none; z-index: 50;
+        #quality-btn {
+            position: fixed; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.8); border: 1px solid #0f0; color: #0f0;
+            padding: 10px; cursor: pointer; z-index: 30; pointer-events: auto;
         }
-        .inactive-message .big { font-size: 120px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
-    <button class="quality-toggle" onclick="toggleQuality()" id="qualityBtn">QUALITY: HIGH</button>
+    <!-- LAYER 0: Video -->
+    <video id="movie-layer" autoplay muted loop playsinline></video>
     
-    <!-- Layer stack: Base -> Video -> Canvas (additive) -->
-    <div id="base-layer"></div>
-    <video id="video-bg" autoplay muted loop playsinline></video>
-    <canvas id="canvas"></canvas>
-
-    <div id="start-screen">
-        <div class="fenthouse-text">🌿 CLICK TO ENTER FENTHOUSE 🌿</div>
-        <div id="countdown" style="color: #0f0; font-size: 24px; margin-top: 20px;"></div>
-    </div>
-
-    <div class="overlay" id="activeOverlay">
-        <div class="fenthouse-text" id="fenthouseStatus">🌿 FENTHOUSE MODE 🌿</div>
-        <div class="chaos-number" id="chaosDisplay">42069</div>
-    </div>
-
-    <!-- Movie info display - persistent -->
-    <div id="movie-info" style="position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 50; background: rgba(0,0,0,0.7); border: 1px solid #0f0; padding: 8px 20px; border-radius: 20px; color: #0f0; font-size: 14px; display: none;"></div>
-
-    <div id="inactiveOverlay" class="inactive-message">
-        <div class="big">🔒</div>
-        <div>FENTHOUSE MODE INACTIVE</div>
-        <div style="font-size: 16px; margin-top: 10px;">Chaos must reach 42069 to unlock</div>
+    <!-- LAYER 1: Psychedelic canvas with additive blend -->
+    <canvas id="psychedelic-layer"></canvas>
+    
+    <!-- LAYER 2: UI -->
+    <div id="ui-layer">
+        <button id="quality-btn" onclick="toggleQuality()">QUALITY: HIGH</button>
+        
+        <div id="start-screen">
+            <div class="fenthouse-text">🌿 ENTER FENTHOUSE 🌿</div>
+            <div id="countdown" style="color:#0f0;font-size:24px;margin-top:20px;"></div>
+        </div>
+        
+        <div class="overlay" id="active-overlay" style="display:none;">
+            <div class="fenthouse-text">🌿 FENTHOUSE 🌿</div>
+            <div class="chaos-number">42069</div>
+        </div>
+        
+        <div id="movie-info" style="display:none;"></div>
     </div>
 
     <script>
-        const canvas = document.getElementById('canvas');
+        const canvas = document.getElementById('psychedelic-layer');
         const ctx = canvas.getContext('2d');
-        let width, height;
-        let time = 0;
+        let width, height, time = 0;
         let fenthouseActive = false;
-        let particles = [];
-        let spirals = [];
-        let countdown = null;
-        let qualityMode = 'high';
-        let frameSkip = 0;
+        let particles = [], spirals = [];
+        let quality = 'high';
         let lastFrame = 0;
-
+        
         function resize() {
-            // Use lower resolution for performance
-            const scale = qualityMode === 'low' ? 0.5 : (qualityMode === 'medium' ? 0.75 : 1);
+            const scale = quality === 'low' ? 0.5 : (quality === 'medium' ? 0.75 : 1);
             width = canvas.width = window.innerWidth * scale;
             height = canvas.height = window.innerHeight * scale;
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
+            canvas.style.width = '100vw';
+            canvas.style.height = '100vh';
         }
         resize();
         window.addEventListener('resize', () => { resize(); initParticles(); });
-
+        
         function toggleQuality() {
-            qualityMode = qualityMode === 'high' ? 'medium' : (qualityMode === 'medium' ? 'low' : 'high');
-            document.getElementById('qualityBtn').textContent = `QUALITY: ${qualityMode.toUpperCase()}`;
-            resize();
-            initParticles();
+            quality = quality === 'high' ? 'medium' : (quality === 'medium' ? 'low' : 'high');
+            document.getElementById('quality-btn').textContent = `QUALITY: ${quality.toUpperCase()}`;
+            resize(); initParticles();
         }
-
-        // OPTIMIZED PARTICLES - fewer, simpler, faster
-        class PsyParticle {
-            constructor() {
-                this.reset();
-            }
+        
+        // Particles
+        class Particle {
+            constructor() { this.reset(); }
             reset() {
                 this.x = Math.random() * width;
                 this.y = Math.random() * height;
-                this.size = Math.random() * 8 + 4;
-                this.speedX = (Math.random() - 0.5) * 8;
-                this.speedY = (Math.random() - 0.5) * 8;
+                this.size = Math.random() * 6 + 3;
+                this.vx = (Math.random() - 0.5) * 6;
+                this.vy = (Math.random() - 0.5) * 6;
                 this.hue = Math.random() * 360;
                 this.life = 1;
-                this.decay = Math.random() * 0.015 + 0.008;
             }
             update() {
-                this.x += this.speedX;
-                this.y += this.speedY;
-                this.hue += 8;
-                this.life -= this.decay;
-                if (this.x < 0) this.x = width;
-                if (this.x > width) this.x = 0;
-                if (this.y < 0) this.y = height;
-                if (this.y > height) this.y = 0;
+                this.x += this.vx; this.y += this.vy;
+                this.hue += 5; this.life -= 0.01;
+                if (this.x < 0) this.x = width; if (this.x > width) this.x = 0;
+                if (this.y < 0) this.y = height; if (this.y > height) this.y = 0;
                 if (this.life <= 0) this.reset();
             }
             draw() {
-                ctx.globalAlpha = this.life * 0.9;
-                ctx.fillStyle = `hsl(${this.hue}, 100%, 70%)`;
-                // Glow effect
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = `hsl(${this.hue}, 100%, 60%)`;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.shadowBlur = 0;
             }
         }
-
-        // SIMPLIFIED SPIRAL
-        class RainbowSpiral {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
+        
+        // Spirals
+        class Spiral {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
                 this.radius = 0;
-                this.maxRadius = Math.min(width, height) * 0.4;
                 this.angle = 0;
                 this.hue = 0;
             }
             update() {
-                this.radius += 4;
-                this.angle += 0.02;
-                this.hue += 5;
-                if (this.radius > this.maxRadius) {
+                this.radius += 3;
+                this.angle += 0.03;
+                this.hue += 3;
+                if (this.radius > Math.min(width, height) * 0.4) {
                     this.radius = 0;
                     this.x = Math.random() * width;
                     this.y = Math.random() * height;
@@ -253,19 +180,15 @@
                 ctx.save();
                 ctx.translate(this.x, this.y);
                 ctx.rotate(this.angle);
-                ctx.strokeStyle = `hsla(${this.hue}, 100%, 70%, 0.5)`;
-                ctx.lineWidth = 3;
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 50%, 0.4)`;
+                ctx.lineWidth = 2;
                 ctx.beginPath();
-                const arms = qualityMode === 'low' ? 3 : 4;
-                for (let arm = 0; arm < arms; arm++) {
-                    const armAngle = (arm / arms) * Math.PI * 2;
-                    for (let a = 0; a < Math.PI * 4; a += 0.1) {
-                        const r = this.radius * (1 - a/(Math.PI * 4));
-                        const x = Math.cos(armAngle + a) * r;
-                        const y = Math.sin(armAngle + a) * r;
-                        if (a === 0) ctx.moveTo(x, y);
+                for (let arm = 0; arm < 4; arm++) {
+                    const a = (arm / 4) * Math.PI * 2;
+                    for (let r = 0; r < this.radius; r += 5) {
+                        const x = Math.cos(a + r * 0.05) * r;
+                        const y = Math.sin(a + r * 0.05) * r;
+                        if (r === 0) ctx.moveTo(x, y);
                         else ctx.lineTo(x, y);
                     }
                 }
@@ -273,179 +196,93 @@
                 ctx.restore();
             }
         }
-
-        // Initialize particles based on quality
+        
         function initParticles() {
             particles = [];
             spirals = [];
-            const particleCount = qualityMode === 'low' ? 20 : (qualityMode === 'medium' ? 35 : 50);
-            const spiralCount = qualityMode === 'low' ? 1 : (qualityMode === 'medium' ? 2 : 3);
-            for (let i = 0; i < particleCount; i++) particles.push(new PsyParticle());
-            for (let i = 0; i < spiralCount; i++) spirals.push(new RainbowSpiral(Math.random() * width, Math.random() * height));
+            const pc = quality === 'low' ? 15 : (quality === 'medium' ? 30 : 50);
+            const sc = quality === 'low' ? 1 : (quality === 'medium' ? 2 : 3);
+            for (let i = 0; i < pc; i++) particles.push(new Particle());
+            for (let i = 0; i < sc; i++) spirals.push(new Spiral());
         }
         initParticles();
-
-        // OPTIMIZED ANIMATION LOOP with ADDITIVE blending
+        
         function animate(now) {
             requestAnimationFrame(animate);
-            
-            // Frame skipping for performance
-            const targetFPS = qualityMode === 'low' ? 20 : (qualityMode === 'medium' ? 30 : 60);
-            const frameInterval = 1000 / targetFPS;
-            if (now - lastFrame < frameInterval) return;
+            const fps = quality === 'low' ? 20 : (quality === 'medium' ? 30 : 60);
+            if (now - lastFrame < 1000 / fps) return;
             lastFrame = now;
-            
             time += 0.033;
-
+            
             if (fenthouseActive) {
-                // Fade trails - don't clear completely so video shows through
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                // Soft fade for trails
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
                 ctx.fillRect(0, 0, width, height);
-
-                // Draw spirals with glow
+                
+                // Draw effects
                 spirals.forEach(s => { s.update(); s.draw(); });
-
-                // Draw particles with glow
                 particles.forEach(p => { p.update(); p.draw(); });
-
-                // Occasional full-screen flash
-                if (Math.random() < 0.03) {
-                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.1)`;
+                
+                // Flash
+                if (Math.random() < 0.02) {
+                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.15)`;
                     ctx.fillRect(0, 0, width, height);
                 }
-
-                // Update chaos display
-                const chaosEl = document.getElementById('chaosDisplay');
-                if (chaosEl && Math.random() < 0.1) {
-                    chaosEl.textContent = '42069';
-                }
-            } else {
-                // Slow fade when inactive
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
-                ctx.fillRect(0, 0, width, height);
             }
         }
-
-        // Check Fenthouse status
-        async function checkFenthouse() {
+        animate(0);
+        
+        // Movies
+        let MOVIES = [], videoPlayer = null, currentMovie = null;
+        
+        async function loadMovies() {
             try {
-                const response = await fetch('/api/metrics?t=' + Date.now());
-                const data = await response.json();
-                fenthouseActive = data.fenthouse_active === true;
-                countdown = data.fenthouse_countdown;
-                
-                if (data.fenthouse_countdown) {
-                    fenthouseExpiry = Date.now() + (data.fenthouse_countdown.total_seconds * 1000);
-                }
-
-                document.getElementById('activeOverlay').style.display = fenthouseActive ? 'block' : 'none';
-                document.getElementById('inactiveOverlay').style.display = fenthouseActive ? 'none' : 'block';
-
-                if (countdown && !videoPlayer) {
-                    document.getElementById('countdown').textContent = `🔒 ${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`;
-                }
-            } catch (e) {
-                // Silent fail
-            }
-        }
-
-        // ARCHIVE.ORG VIDEO BACKGROUND
-        let MOVIES = [];
-        let moviesLoaded = false;
-        let videoPlayer = null;
-        let currentMovieIndex = -1;
-        let triedMovies = new Set();
-        let movieStartTime = null;
-        let fenthouseExpiry = null;
-
-        async function loadMovieCatalog() {
-            try {
-                const res = await fetch('/api/movies?t=' + Date.now());
+                const res = await fetch('/api/movies');
                 const data = await res.json();
                 MOVIES = data.movies || [];
-                moviesLoaded = true;
-            } catch (e) {
-                MOVIES = [];
-            }
+            } catch (e) { console.error(e); }
         }
-        loadMovieCatalog();
-
-        function getNextMovie() {
-            if (MOVIES.length === 0) return null;
-            for (let i = 0; i < MOVIES.length; i++) {
-                const idx = (currentMovieIndex + 1 + i) % MOVIES.length;
-                if (!triedMovies.has(idx)) return idx;
-            }
-            triedMovies.clear();
-            return 0;
+        loadMovies();
+        
+        function playMovie(idx) {
+            if (!MOVIES.length || idx >= MOVIES.length) return;
+            currentMovie = MOVIES[idx];
+            const video = document.getElementById('movie-layer');
+            video.src = currentMovie.url;
+            video.play().then(() => {
+                document.getElementById('movie-info').style.display = 'block';
+                document.getElementById('movie-info').textContent = `🎬 ${currentMovie.title}`;
+            }).catch(() => setTimeout(() => playMovie((idx + 1) % MOVIES.length), 1000));
         }
-
-        function loadMovie(index) {
-            if (index === null || MOVIES.length === 0) return;
-            currentMovieIndex = index;
-            triedMovies.add(index);
-            const movie = MOVIES[index];
-            
-            const videoEl = document.getElementById('video-bg');
-            videoEl.classList.add('visible');
-            videoEl.src = movie.url;
-            
-            // Show movie info
-            const movieInfo = document.getElementById('movie-info');
-            if (movieInfo) {
-                movieInfo.style.display = 'block';
-                movieInfo.textContent = `🎬 ${movie.title}`;
-            }
-            
-            videoEl.play().then(() => {
-                movieStartTime = Date.now();
-                videoPlayer = videoEl;
-                console.log('✅ Playing:', movie.title);
-            }).catch((e) => {
-                console.error('❌ Playback failed:', e);
-                setTimeout(() => loadMovie(getNextMovie()), 1000);
-            });
-            videoEl.onerror = () => {
-                console.error('❌ Video error, trying next...');
-                setTimeout(() => loadMovie(getNextMovie()), 1000);
-            };
-        }
-
-        function loadRandomMovie() {
-            if (MOVIES.length === 0) {
-                window.open('/movie-player', '_blank');
-                return;
-            }
-            loadMovie(Math.floor(Math.random() * MOVIES.length));
-        }
-
-        function syncMovieWithFenthouse() {
-            if (!videoPlayer || !fenthouseExpiry || !movieStartTime) return;
-            const now = Date.now();
-            const fentRemaining = fenthouseExpiry - now;
-            if (fentRemaining < 10000) return;
-            const syncPoints = [3600000, 1800000, 600000, 300000, 60000];
-            for (const point of syncPoints) {
-                if (fentRemaining > point && fentRemaining < point + 5000) {
-                    videoPlayer.currentTime = 0;
-                    videoPlayer.play();
-                    movieStartTime = now;
-                    break;
+        
+        // Check Fenthouse status
+        async function check() {
+            try {
+                const res = await fetch('/api/metrics?t=' + Date.now());
+                const data = await res.json();
+                fenthouseActive = data.fenthouse_active;
+                
+                if (fenthouseActive) {
+                    document.getElementById('active-overlay').style.display = 'block';
+                } else {
+                    document.getElementById('active-overlay').style.display = 'none';
                 }
-            }
+                
+                if (data.fenthouse_countdown && !videoPlayer) {
+                    const c = data.fenthouse_countdown;
+                    document.getElementById('countdown').textContent = 
+                        `🔒 ${c.hours}h ${c.minutes}m ${c.seconds}s`;
+                }
+            } catch (e) {}
         }
-
-        // Start screen click
+        check();
+        setInterval(check, 5000);
+        
+        // Start on click
         document.getElementById('start-screen').addEventListener('click', function() {
             this.style.display = 'none';
-            loadRandomMovie();
+            playMovie(Math.floor(Math.random() * MOVIES.length));
         });
-
-        // Initialize
-        checkFenthouse();
-        animate(0);
-        setInterval(checkFenthouse, 5000);
-        setInterval(() => { if (videoPlayer) syncMovieWithFenthouse(); }, 10000);
     </script>
 </body>
 </html>

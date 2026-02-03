@@ -16,7 +16,7 @@ from collections import deque
 DB_PATH = os.path.join(os.path.dirname(__file__), 'dongometer.db')
 
 # Matrix indexer cache
-_indexer_cache = {'count': None, 'timestamp': 0}
+_indexer_cache = {'count': None, 'timestamp': 0, 'rooms': None}
 _metrics_cache = {'data': None, 'timestamp': 0}
 
 def get_indexer_metrics():
@@ -91,6 +91,35 @@ def get_indexer_count():
             _indexer_cache['count'] = count
             _indexer_cache['timestamp'] = time.time()
             return count
+        return None
+
+    except Exception:
+        # MongoDB not available
+        return None
+
+def get_indexer_rooms():
+    """Get room count from Matrix indexer MongoDB"""
+    global _indexer_cache
+
+    # Return cached value if recent
+    if _indexer_cache['rooms'] is not None:
+        if time.time() - _indexer_cache['timestamp'] < 60:
+            return _indexer_cache['rooms']
+
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['mongosh', '--quiet',
+             'mongodb://mongo:27017/matrix_index',
+             '--eval', 'db.events.distinct("room_id").length'],
+            capture_output=True, text=True, timeout=5
+        )
+
+        if result.returncode == 0:
+            rooms = int(result.stdout.strip())
+            _indexer_cache['rooms'] = rooms
+            _indexer_cache['timestamp'] = time.time()
+            return rooms
         return None
 
     except Exception:
@@ -612,6 +641,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
 
         # Get Matrix indexer count if available
         indexer_count = get_indexer_count()
+        indexer_rooms = get_indexer_rooms()
 
         # Get glizz count too
         glizz_count = get_cached_glizz_count()
@@ -634,6 +664,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
             'last_updated': metrics['last_updated'],
             'status': status,
             'matrix_indexer_messages': indexer_count,
+            'matrix_indexer_rooms': indexer_rooms,
             'fenthouse_countdown': fenthouse_countdown
         }
         self.send_json(data)

@@ -644,6 +644,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_manifold_3d()
         elif path == '/fentviz':
             self.serve_fentviz()
+        elif path == '/fentviz-webgl':
+            self.serve_fentviz_webgl()
         elif path == '/fentviz_glitch':
             self.serve_fentviz_glitch()
         elif path == '/indexer':
@@ -929,6 +931,18 @@ class DongometerHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
         self.wfile.write(html.encode())
+
+    def serve_fentviz_webgl(self):
+        """Serve the WebGL inkbox-style fluid simulation visualizer"""
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'templates/fenthouse_viz_webgl.html'), 'r') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(content.encode())
+        except FileNotFoundError:
+            self.send_error(404)
 
     def serve_fentviz(self):
         """Serve the Fenthouse psychedelic visualizer"""

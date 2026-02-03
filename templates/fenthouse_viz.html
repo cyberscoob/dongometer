@@ -198,10 +198,181 @@
             }
         }
         
+        // ========== 3 CRAZY SHADER EFFECTS ==========
+        
+        // EFFECT 1: RGB Chromatic Aberration - splits color channels
+        class RGBShiftEffect {
+            constructor() {
+                this.offset = 0;
+                this.intensity = 5;
+            }
+            update() {
+                this.offset = Math.sin(time * 2) * this.intensity + Math.cos(time * 3) * this.intensity;
+            }
+            draw() {
+                // Draw shifting color bars
+                const barHeight = height / 3;
+                ctx.globalCompositeOperation = 'screen';
+                
+                // Red channel (shifted left)
+                ctx.fillStyle = `rgba(255, 0, 0, 0.3)`;
+                ctx.fillRect(this.offset, 0, width, barHeight);
+                
+                // Green channel (center)
+                ctx.fillStyle = `rgba(0, 255, 0, 0.3)`;
+                ctx.fillRect(0, barHeight, width, barHeight);
+                
+                // Blue channel (shifted right)
+                ctx.fillStyle = `rgba(0, 0, 255, 0.3)`;
+                ctx.fillRect(-this.offset, barHeight * 2, width, barHeight);
+                
+                // Glitch bars
+                for (let i = 0; i < 5; i++) {
+                    const y = Math.random() * height;
+                    const h = Math.random() * 50 + 10;
+                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.5)`;
+                    ctx.fillRect(this.offset + Math.random() * 100 - 50, y, width, h);
+                }
+                
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        }
+        
+        // EFFECT 2: Kaleidoscope - geometric mirror madness
+        class KaleidoscopeEffect {
+            constructor() {
+                this.segments = 8;
+                this.rotation = 0;
+            }
+            update() {
+                this.rotation += 0.01;
+            }
+            draw() {
+                const cx = width / 2;
+                const cy = height / 2;
+                const radius = Math.min(width, height) * 0.5;
+                
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(this.rotation);
+                
+                for (let i = 0; i < this.segments; i++) {
+                    ctx.save();
+                    ctx.rotate((i / this.segments) * Math.PI * 2);
+                    
+                    // Triangular wedge with gradient
+                    const hue = (time * 50 + i * 45) % 360;
+                    const grad = ctx.createLinearGradient(0, 0, radius, 0);
+                    grad.addColorStop(0, `hsla(${hue}, 100%, 50%, 0)`);
+                    grad.addColorStop(0.5, `hsla(${hue}, 100%, 50%, 0.6)`);
+                    grad.addColorStop(1, `hsla(${hue}, 100%, 50%, 0)`);
+                    
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.arc(0, 0, radius, 0, Math.PI * 2 / this.segments);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Inner pattern
+                    ctx.strokeStyle = `hsla(${hue + 180}, 100%, 70%, 0.8)`;
+                    ctx.lineWidth = 3;
+                    for (let r = 20; r < radius; r += 40) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, r, 0, Math.PI * 2 / this.segments);
+                        ctx.stroke();
+                    }
+                    
+                    ctx.restore();
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        // EFFECT 3: Liquid Plasma - organic flowing distortion
+        class LiquidPlasmaEffect {
+            constructor() {
+                this.points = [];
+                for (let i = 0; i < 20; i++) {
+                    this.points.push({
+                        x: Math.random() * width,
+                        y: Math.random() * height,
+                        vx: (Math.random() - 0.5) * 4,
+                        vy: (Math.random() - 0.5) * 4,
+                        size: Math.random() * 100 + 50
+                    });
+                }
+            }
+            update() {
+                this.points.forEach(p => {
+                    p.x += p.vx + Math.sin(time + p.y * 0.01) * 2;
+                    p.y += p.vy + Math.cos(time + p.x * 0.01) * 2;
+                    p.size += Math.sin(time * 3) * 2;
+                    
+                    if (p.x < -100) p.x = width + 100;
+                    if (p.x > width + 100) p.x = -100;
+                    if (p.y < -100) p.y = height + 100;
+                    if (p.y > height + 100) p.y = -100;
+                });
+            }
+            draw() {
+                ctx.globalCompositeOperation = 'screen';
+                
+                this.points.forEach((p, i) => {
+                    const hue = (time * 30 + i * 18) % 360;
+                    
+                    // Glowing blob
+                    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                    grad.addColorStop(0, `hsla(${hue}, 100%, 60%, 0.6)`);
+                    grad.addColorStop(0.5, `hsla(${hue + 30}, 100%, 50%, 0.3)`);
+                    grad.addColorStop(1, `hsla(${hue + 60}, 100%, 40%, 0)`);
+                    
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    // Organic wobbly shape
+                    for (let a = 0; a < Math.PI * 2; a += 0.2) {
+                        const wobble = Math.sin(a * 5 + time * 2) * 20;
+                        const r = p.size + wobble;
+                        const x = p.x + Math.cos(a) * r;
+                        const y = p.y + Math.sin(a) * r;
+                        if (a === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                });
+                
+                // Connecting lines
+                ctx.strokeStyle = `hsla(${time * 50}, 100%, 50%, 0.2)`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let i = 0; i < this.points.length; i++) {
+                    for (let j = i + 1; j < this.points.length; j++) {
+                        const dx = this.points[i].x - this.points[j].x;
+                        const dy = this.points[i].y - this.points[j].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 200) {
+                            ctx.moveTo(this.points[i].x, this.points[i].y);
+                            ctx.lineTo(this.points[j].x, this.points[j].y);
+                        }
+                    }
+                }
+                ctx.stroke();
+                
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        }
+        
+        let rgbShift, kaleidoscope, liquidPlasma;
+        
         function initParticles() {
             particles = [];
             spirals = [];
-            const pc = quality === 'low' ? 15 : (quality === 'medium' ? 30 : 50);
+            rgbShift = new RGBShiftEffect();
+            kaleidoscope = new KaleidoscopeEffect();
+            liquidPlasma = new LiquidPlasmaEffect();
+            const pc = quality === 'low' ? 10 : (quality === 'medium' ? 20 : 35);
             const sc = quality === 'low' ? 1 : (quality === 'medium' ? 2 : 3);
             for (let i = 0; i < pc; i++) particles.push(new Particle());
             for (let i = 0; i < sc; i++) spirals.push(new Spiral());
@@ -217,16 +388,21 @@
             
             // Always run psychedelic effects (video shows through via screen blend)
             // Soft fade for trails - black is transparent with screen blend
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
             ctx.fillRect(0, 0, width, height);
             
-            // Draw effects
+            // 3 CRAZY SHADER EFFECTS
+            rgbShift.update(); rgbShift.draw();
+            kaleidoscope.update(); kaleidoscope.draw();
+            liquidPlasma.update(); liquidPlasma.draw();
+            
+            // Original effects
             spirals.forEach(s => { s.update(); s.draw(); });
             particles.forEach(p => { p.update(); p.draw(); });
             
-            // Flash
-            if (Math.random() < 0.02) {
-                ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.15)`;
+            // Random full-screen flash
+            if (Math.random() < 0.03) {
+                ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.12)`;
                 ctx.fillRect(0, 0, width, height);
             }
         }

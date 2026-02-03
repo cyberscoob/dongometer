@@ -3,238 +3,489 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dong Manifold 🍆</title>
+    <title>Dong Manifold 🍆 | Flood Control Center</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #0a0a0f;
-            color: #fff;
+            background: #050508;
+            color: #0f0;
             font-family: 'Courier New', monospace;
-            overflow-x: hidden;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            font-size: 3em;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #ff00ff, #00ffff, #ffff00);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .subtitle {
-            text-align: center;
-            color: #888;
-            margin-bottom: 30px;
-        }
-        .manifold {
-            position: relative;
-            width: 100%;
-            height: 600px;
-            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
-            border: 3px solid #ff00ff;
-            border-radius: 20px;
             overflow: hidden;
         }
-        .axis {
+        .container { width: 100vw; height: 100vh; position: relative; }
+        
+        /* Canvas for high-performance rendering */
+        #manifoldCanvas {
             position: absolute;
-            font-size: 12px;
-            color: #666;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
         }
-        .axis.x {
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        .axis.y {
-            left: 10px;
-            top: 50%;
-            transform: translateY(-50%) rotate(-90deg);
-            transform-origin: center;
-        }
-        .chaos-point {
+        
+        /* Overlay UI */
+        .hud {
             position: absolute;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            animation: pulse 2s infinite;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .chaos-point:hover {
-            transform: translate(-50%, -50%) scale(2);
-            z-index: 100;
-        }
-        .chaos-point.calm { background: #00ff88; box-shadow: 0 0 20px #00ff88; }
-        .chaos-point.active { background: #ffff00; box-shadow: 0 0 20px #ffff00; }
-        .chaos-point.chaotic { background: #ff8800; box-shadow: 0 0 20px #ff8800; }
-        .chaos-point.demonic { background: #ff0088; box-shadow: 0 0 20px #ff0088; }
-        .chaos-point.apocalyptic { background: #ff0000; box-shadow: 0 0 30px #ff0000; }
-        .chaos-point.fenthouse {
-            background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff88, #0088ff, #8800ff);
-            box-shadow: 0 0 50px currentColor;
-            width: 40px;
-            height: 40px;
-            animation: rainbow 1s linear infinite, pulse 1s infinite;
-        }
-        .chaos-label {
-            position: absolute;
-            font-size: 10px;
-            color: #fff;
-            text-shadow: 0 0 5px #000;
-            pointer-events: none;
-            white-space: nowrap;
-        }
-        .trajectory {
-            position: absolute;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #ff00ff, transparent);
-            transform-origin: left center;
-            opacity: 0.3;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-            50% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.2); }
-        }
-        @keyframes rainbow {
-            0% { filter: hue-rotate(0deg); }
-            100% { filter: hue-rotate(360deg); }
-        }
-        .legend {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 10px;
-        }
-        .legend-color {
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-        }
-        .current-state {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.8);
+            z-index: 10;
+            background: rgba(0, 20, 0, 0.9);
+            border: 1px solid #0f0;
             padding: 15px;
-            border-radius: 15px;
-            border: 2px solid #ff00ff;
-            font-size: 14px;
-            max-width: 250px;
+            font-size: 12px;
         }
-        .metric {
+        
+        .hud.top-left { top: 10px; left: 10px; border-radius: 0 15px 15px 0; }
+        .hud.top-right { top: 10px; right: 10px; border-radius: 15px 0 0 15px; text-align: right; }
+        .hud.flood-alert {
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border: 3px solid #f00;
+            background: rgba(50, 0, 0, 0.95);
+            color: #f00;
+            font-size: 24px;
+            display: none;
+            animation: pulse-red 0.5s infinite;
+        }
+        
+        .hud-title {
+            color: #0ff;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        
+        .metric-row {
             display: flex;
             justify-content: space-between;
             margin: 5px 0;
+            min-width: 200px;
         }
-        .metric span:first-child { color: #888; }
-        .metric span:last-child { color: #ff00ff; font-weight: bold; }
+        
+        .metric-label { color: #888; }
+        .metric-value { color: #0f0; font-weight: bold; }
+        .metric-value.flood { color: #f00; animation: blink 0.3s infinite; }
+        .metric-value.fent { color: #0f0; text-shadow: 0 0 10px #0f0; font-size: 16px; }
+        
+        /* Chaos Level Indicator */
+        .chaos-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #0f0;
+            padding: 15px 30px;
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .bar-container {
+            width: 300px;
+            height: 20px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .bar-fill {
+            height: 100%;
+            transition: width 0.3s ease, background 0.3s ease;
+        }
+        .bar-fill.calm { background: #0f0; }
+        .bar-fill.active { background: #ff0; }
+        .bar-fill.chaotic { background: #f80; }
+        .bar-fill.demonic { background: #f08; }
+        .bar-fill.apocalyptic { background: #f00; }
+        .bar-fill.heatdeath { 
+            background: linear-gradient(90deg, #f00, #f0f, #00f, #0ff, #0f0, #ff0, #f00);
+            background-size: 200% 100%;
+            animation: rainbow-fill 2s linear infinite;
+        }
+        
+        .chaos-text {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        /* Legend overlay */
+        .legend-overlay {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #0f0;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 3px 0;
+        }
+        
+        .legend-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+        }
+        
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; box-shadow: 0 0 20px #f00; }
+            50% { opacity: 0.7; box-shadow: 0 0 50px #f00; }
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        @keyframes rainbow-fill {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>DONG MANIFOLD 🍆</h1>
-        <p class="subtitle">Chaos Phase Space Visualization</p>
+        <canvas id="manifoldCanvas"></canvas>
         
-        <div class="current-state" id="currentState">
-            <div style="text-align: center; margin-bottom: 10px; color: #ff00ff;">🌿 FENTHOUSE ACTIVE</div>
-            <div class="metric"><span>Chaos:</span><span>42069.0</span></div>
-            <div class="metric"><span>Pizza:</span><span>50B+</span></div>
-            <div class="metric"><span>Doors:</span><span>50B+</span></div>
-            <div class="metric"><span>Status:</span><span>FOLDING</span></div>
+        <!-- Top Left: Real-time Metrics -->
+        <div class="hud top-left">
+            <div class="hud-title">📊 DONGOMETER METRICS</div>
+            <div class="metric-row">
+                <span class="metric-label">Chaos:</span>
+                <span class="metric-value" id="chaosVal">Loading...</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">5min Msgs:</span>
+                <span class="metric-value" id="chat5Val">-</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">10min Doors:</span>
+                <span class="metric-value" id="door10Val">-</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Pizzas:</span>
+                <span class="metric-value" id="pizzaVal">-</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Status:</span>
+                <span class="metric-value" id="statusVal">-</span>
+            </div>
         </div>
         
-        <div class="manifold" id="manifold">
-            <div class="axis x">Chat Velocity →</div>
-            <div class="axis y">Pizza Density →</div>
-            
-            <!-- Chaos Points -->
-            <div class="chaos-point calm" style="left: 10%; top: 80%;" title="0-20: Calm"></div>
-            <div class="chaos-label" style="left: 10%; top: 75%;">😴 CALM</div>
-            
-            <div class="chaos-point active" style="left: 25%; top: 65%;" title="21-40: Active"></div>
-            <div class="chaos-label" style="left: 25%; top: 60%;">⚡ ACTIVE</div>
-            
-            <div class="chaos-point chaotic" style="left: 40%; top: 50%;" title="41-60: Chaotic"></div>
-            <div class="chaos-label" style="left: 40%; top: 45%;">🍕 CHAOTIC</div>
-            
-            <div class="chaos-point demonic" style="left: 55%; top: 35%;" title="61-80: Demonic"></div>
-            <div class="chaos-label" style="left: 55%; top: 30%;">👿 DEMONIC</div>
-            
-            <div class="chaos-point apocalyptic" style="left: 70%; top: 20%;" title="81-100: Apocalyptic"></div>
-            <div class="chaos-label" style="left: 70%; top: 15%;">☠️ APOCALYPTIC</div>
-            
-            <div class="chaos-point fenthouse" style="left: 85%; top: 10%;" title="42069: FENTHOUSE"></div>
-            <div class="chaos-label" style="left: 85%; top: 2%; font-size: 14px;">🌿 FENTHOUSE</div>
-            
-            <!-- Trajectory Path -->
-            <svg style="position: absolute; width: 100%; height: 100%; pointer-events: none;">
-                <path d="M 100 480 Q 200 400 300 300 T 500 150 T 700 100" 
-                      stroke="#ff00ff" stroke-width="3" fill="none" 
-                      stroke-dasharray="10,5" opacity="0.5">
-                    <animate attributeName="stroke-dashoffset" from="100" to="0" dur="3s" repeatCount="indefinite" />
-                </path>
-            </svg>
+        <!-- Top Right: Trajectory Analysis -->
+        <div class="hud top-right">
+            <div class="hud-title">🎯 TRAJECTORY</div>
+            <div class="metric-row">
+                <span class="metric-label">Velocity:</span>
+                <span class="metric-value" id="velocityVal">0 msg/min</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Direction:</span>
+                <span class="metric-value" id="directionVal">→</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Flood Risk:</span>
+                <span class="metric-value" id="floodRiskVal">LOW</span>
+            </div>
+            <div class="metric-row">
+                <span class="metric-label">Time to Fent:</span>
+                <span class="metric-value" id="timeToFentVal">∞</span>
+            </div>
         </div>
         
-        <div class="legend">
-            <div class="legend-item">
-                <div class="legend-color calm"></div>
-                <span><strong>0-20:</strong> Calm — The donghouse sleeps</span>
+        <!-- Center: Flood Alert (hidden by default) -->
+        <div class="hud flood-alert" id="floodAlert">
+            🚨 DONG FLOOD DETECTED 🚨<br>
+            <span style="font-size: 14px;">Buffer at capacity - chaos overflowing</span>
+        </div>
+        
+        <!-- Bottom Center: Chaos Level Bar -->
+        <div class="chaos-bar">
+            <span>CHAOS LEVEL</span>
+            <div class="bar-container">
+                <div class="bar-fill" id="chaosBar" style="width: 0%"></div>
             </div>
-            <div class="legend-item">
-                <div class="legend-color active"></div>
-                <span><strong>21-40:</strong> Active — Normal ops</span>
+            <span class="chaos-text" id="chaosBig">0.0</span>
+        </div>
+        
+        <!-- Legend -->
+        <div class="legend-overlay">
+            <div class="metric-row">
+                <span class="metric-label">X: Chat Velocity</span>
             </div>
-            <div class="legend-item">
-                <div class="legend-color chaotic"></div>
-                <span><strong>41-60:</strong> Chaotic — Pizza's here</span>
+            <div class="metric-row">
+                <span class="metric-label">Y: Pizza Density</span>
             </div>
-            <div class="legend-item">
-                <div class="legend-color demonic"></div>
-                <span><strong>61-80:</strong> Demonic — Yakko down</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color apocalyptic"></div>
-                <span><strong>81-100:</strong> Apocalyptic — Run</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color fenthouse"></div>
-                <span><strong>42069:</strong> Fenthouse — Folding</span>
-            </div>
+            <div class="legend-item"><div class="legend-dot" style="background:#0f0"></div> 😴 0-20</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ff0"></div> ⚡ 21-40</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f80"></div> 🍕 41-60</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f08"></div> 👿 61-80</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f00"></div> ☠️ 81-100</div>
+            <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f)"></div> ∞ 100+</div>
         </div>
     </div>
-    
+
     <script>
-        // Animate the trajectory
-        function updateManifold() {
-            const points = document.querySelectorAll('.chaos-point');
-            points.forEach(point => {
-                const rect = point.getBoundingClientRect();
-                // Add subtle floating motion
-                const offset = Math.sin(Date.now() / 1000) * 3;
-                point.style.transform = `translate(calc(-50% + ${offset}px), calc(-50% + ${offset}px))`;
-            });
-            requestAnimationFrame(updateManifold);
+        const canvas = document.getElementById('manifoldCanvas');
+        const ctx = canvas.getContext('2d');
+        let lastData = null;
+        let trajectory = [];
+        let maxPoints = 500;
+        
+        // Resize canvas
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
-        updateManifold();
+        resize();
+        window.addEventListener('resize', resize);
+        
+        // Logarithmic scale for huge chaos values
+        function logScale(value, maxVal = 10000) {
+            if (value <= 0) return 0;
+            return Math.log10(value) / Math.log10(maxVal);
+        }
+        
+        // Get chaos class
+        function getChaosClass(score) {
+            if (score >= 42069) return 'fent';
+            if (score > 1000) return 'heatdeath';
+            if (score > 95) return 'apocalyptic';
+            if (score > 80) return 'demonic';
+            if (score > 60) return 'chaotic';
+            if (score > 40) return 'active';
+            return 'calm';
+        }
+        
+        // Draw grid
+        function drawGrid() {
+            ctx.strokeStyle = '#112211';
+            ctx.lineWidth = 1;
+            const gridSize = 50;
+            
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+        
+        // Draw chaos regions
+        function drawRegions() {
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            // Calm region
+            ctx.fillStyle = 'rgba(0, 255, 136, 0.05)';
+            ctx.fillRect(0, h*0.8, w*0.2, h*0.2);
+            
+            // Active region
+            ctx.fillStyle = 'rgba(255, 255, 0, 0.05)';
+            ctx.fillRect(w*0.2, h*0.6, w*0.2, h*0.25);
+            
+            // Chaotic region
+            ctx.fillStyle = 'rgba(255, 136, 0, 0.05)';
+            ctx.fillRect(w*0.4, h*0.4, w*0.2, h*0.25);
+            
+            // Demonic region
+            ctx.fillStyle = 'rgba(255, 0, 136, 0.05)';
+            ctx.fillRect(w*0.6, h*0.2, w*0.2, h*0.25);
+            
+            // Apocalyptic region
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.05)';
+            ctx.fillRect(w*0.8, 0, w*0.2, h*0.25);
+        }
+        
+        // Draw trajectory
+        function drawTrajectory() {
+            if (trajectory.length < 2) return;
+            
+            ctx.strokeStyle = '#ff00ff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for (let i = 0; i < trajectory.length - 1; i++) {
+                const p1 = trajectory[i];
+                const p2 = trajectory[i + 1];
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+            }
+            ctx.stroke();
+            
+            // Draw points
+            trajectory.forEach((p, i) => {
+                const alpha = i / trajectory.length;
+                ctx.fillStyle = `rgba(255, 0, 255, ${alpha * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+        
+        // Draw current position
+        function drawCurrent(chaos, chat, door, pizza) {
+            // Map to canvas (logarithmic for huge values)
+            const x = Math.min(canvas.width * 0.9, Math.max(50, 50 + logScale(chat, 1000) * canvas.width * 0.8));
+            const y = Math.min(canvas.height * 0.9, Math.max(50, canvas.height * 0.9 - logScale(pizza, 10000000000) * canvas.height * 0.8));
+            
+            // Add to trajectory
+            trajectory.push({x, y, chaos, time: Date.now()});
+            if (trajectory.length > maxPoints) trajectory.shift();
+            
+            // Draw current point
+            const chaosClass = getChaosClass(chaos);
+            let color = '#0f0';
+            let radius = 8;
+            
+            switch(chaosClass) {
+                case 'calm': color = '#0f0'; break;
+                case 'active': color = '#ff0'; radius = 12; break;
+                case 'chaotic': color = '#f80'; radius = 15; break;
+                case 'demonic': color = '#f08'; radius = 18; break;
+                case 'apocalyptic': color = '#f00'; radius = 22; break;
+                case 'heatdeath': color = '#f0f'; radius = 26; break;
+                case 'fent': color = '#0f0'; radius = 30; break;
+            }
+            
+            // Glow effect
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = color;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            
+            // Label
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px monospace';
+            ctx.fillText(`⚡${chaos.toFixed(1)}`, x + 20, y);
+        }
+        
+        // Main draw loop
+        function draw() {
+            ctx.fillStyle = '#050508';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            drawGrid();
+            drawRegions();
+            drawTrajectory();
+            
+            if (lastData) {
+                drawCurrent(
+                    lastData.chaos_score,
+                    lastData.chat_velocity_5min,
+                    lastData.door_events_10min,
+                    lastData.pizza_count
+                );
+            }
+        }
+        
+        // Update UI with metrics
+        function updateUI(data) {
+            const chaos = data.chaos_score;
+            const chaosClass = getChaosClass(chaos);
+            
+            // Update metrics
+            document.getElementById('chaosVal').textContent = chaos.toFixed(1);
+            document.getElementById('chaosVal').className = 'metric-value ' + (chaosClass === 'fent' ? 'fent' : chaos > 80 ? 'flood' : '');
+            document.getElementById('chat5Val').textContent = data.chat_velocity_5min;
+            document.getElementById('door10Val').textContent = data.door_events_10min;
+            document.getElementById('pizzaVal').textContent = data.pizza_count > 1000000 ? (data.pizza_count / 1000000).toFixed(1) + 'M' : data.pizza_count;
+            document.getElementById('statusVal').textContent = data.status?.substring(0, 20) || 'Unknown';
+            
+            // Update chaos bar
+            let barWidth = Math.min(100, (chaos / 100) * 100);
+            if (chaos > 100) barWidth = 100; // Max out at 100 for visual
+            document.getElementById('chaosBar').style.width = barWidth + '%';
+            document.getElementById('chaosBar').className = 'bar-fill ' + chaosClass;
+            document.getElementById('chaosBig').textContent = chaos.toFixed(1);
+            
+            // Calculate trajectory metrics
+            if (trajectory.length > 1) {
+                const recent = trajectory.slice(-5);
+                const dx = recent[recent.length - 1].x - recent[0].x;
+                const dy = recent[recent.length - 1].y - recent[0].y;
+                const velocity = Math.sqrt(dx*dx + dy*dy);
+                document.getElementById('velocityVal').textContent = velocity.toFixed(0) + ' px/min';
+                
+                const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                const arrow = angle > -45 && angle < 45 ? '→' : angle >= 45 && angle < 135 ? '↓' : angle >= 135 || angle < -135 ? '←' : '↑';
+                document.getElementById('directionVal').textContent = arrow;
+                
+                // Flood risk assessment
+                let risk = 'LOW';
+                if (data.chat_velocity_5min > 50 || chaos > 80) risk = 'MEDIUM';
+                if (data.chat_velocity_5min > 100 || chaos > 500) risk = 'HIGH';
+                if (data.chat_velocity_5min > 500 || chaos > 1000) risk = 'EXTREME';
+                document.getElementById('floodRiskVal').textContent = risk;
+                document.getElementById('floodRiskVal').className = 'metric-value' + (risk !== 'LOW' ? ' flood' : '');
+                
+                // Time to Fenthouse (if not already)
+                if (chaos < 42069) {
+                    const needed = 42069 - chaos;
+                    if (chaos < 0.1) document.getElementById('timeToFentVal').textContent = '∞';
+                    else {
+                        const rate = (trajectory[trajectory.length - 1].chaos - trajectory[0].chaos) / (trajectory.length);
+                        if (rate > 0) {
+                            const minutes = needed / rate / 12; // ~5 sec per update, 12 per min
+                            document.getElementById('timeToFentVal').textContent = minutes.toFixed(1) + ' min';
+                        } else {
+                            document.getElementById('timeToFentVal').textContent = '∞';
+                        }
+                    }
+                } else {
+                    document.getElementById('timeToFentVal').textContent = '🔥 ACTIVE';
+                }
+            }
+            
+            // Flood alert
+            const floodAlert = document.getElementById('floodAlert');
+            if (data.chat_velocity_5min > 100 || chaos > 1000) {
+                floodAlert.style.display = 'block';
+            } else {
+                floodAlert.style.display = 'none';
+            }
+        }
+        
+        // Fetch metrics
+        async function updateMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const data = await response.json();
+                lastData = data;
+                updateUI(data);
+            } catch (err) {
+                console.error('Metrics fetch failed:', err);
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            draw();
+            requestAnimationFrame(animate);
+        }
+        
+        // Start
+        animate();
+        updateMetrics();
+        setInterval(updateMetrics, 5000);
     </script>
 </body>
 </html>

@@ -62,3 +62,19 @@ Types: `chat_message`, `door_open`, `door_close`, `pizza`, `reset_pizza`
 Default: 5000
 
 Shaggy will help expose it properly. 🚀
+
+## Deploy / Restart (inside doghouse)
+
+This project runs **inside the Scoob doghouse container**.
+Pushing to git does **not** automatically restart the running server.
+
+After you change code (and/or run git pull inside the container), restart dongometer with:
+
+    /home/scoob/dongometer/dongometerctl restart
+
+Check status/logs:
+
+    /home/scoob/dongometer/dongometerctl status
+    # logs: /home/scoob/dongometer/dongometer_app.log
+
+Note: This container does not run systemd; dongometerctl is the service manager.

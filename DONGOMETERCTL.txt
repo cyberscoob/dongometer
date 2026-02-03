@@ -1,0 +1,1 @@
+dongometerctlnnThiscontainerdoesnotrunsystemd.Usedongometerctl.nnCommands:n/home/scoob/dongometer/dongometerctlstartn/home/scoob/dongometer/dongometerctlstopn/home/scoob/dongometer/dongometerctlrestartn/home/scoob/dongometer/dongometerctlstatusnnFiles:nPID:/home/scoob/dongometer/dongometer.pidnLog:/home/scoob/dongometer/dongometer_app.lognnAftercodechanges:dongometerctlrestartn

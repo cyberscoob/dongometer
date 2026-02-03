@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+APP_DIR="/home/scoob/dongometer"
+PIDFILE="$APP_DIR/dongometer.pid"
+LOGFILE="$APP_DIR/dongometer_app.log"
+APP="${DONGOMETER_APP:-simple_app.py}"
+
+is_running() {
+  if [[ -f "$PIDFILE" ]]; then
+    pid=$(cat "$PIDFILE" 2>/dev/null || true)
+    [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
+start() {
+  if is_running; then
+    pid=$(cat "$PIDFILE" 2>/dev/null || true)
+    echo "dongometer already running (pid=${pid})"
+    exit 0
+  fi
+  cd "$APP_DIR"
+  nohup python3 -u "$APP" >>"$LOGFILE" 2>&1 &
+  echo $! > "$PIDFILE"
+  sleep 0.2
+  echo "started (pid=$!)"
+}
+
+stop() {
+  if is_running; then
+    pid=$(cat "$PIDFILE")
+    kill "$pid" 2>/dev/null || true
+    sleep 0.5
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"
+    echo "stopped"
+  else
+    echo "not running"
+  fi
+}
+
+restart() {
+  stop || true
+  start
+}
+
+status() {
+  if is_running; then
+    pid=$(cat "$PIDFILE" 2>/dev/null || true)
+    echo "running (pid=${pid})"
+  else
+    echo "not running"
+  fi
+  tail -n 20 "$LOGFILE" 2>/dev/null || true
+  curl -sS --max-time 2 "http://127.0.0.1:5000/api/metrics" >/dev/null && echo "health: OK" || echo "health: FAIL"
+}
+
+case "${1:-}" in
+  start) start;;
+  stop) stop;;
+  restart) restart;;
+  status) status;;
+  *) echo "usage: $0 {start|stop|restart|status}"; exit 2;;
+esac

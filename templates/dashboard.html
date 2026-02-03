@@ -149,14 +149,19 @@
         }
         
         .fenthouse .chaos-score {
-            /* Rainbow chaos number - solid colors */
-            color: #ff00ff;
+            /* Rainbow chaos number with rotating hue shadows */
+            color: #ff0000;
             text-shadow: 
-                2px 0 #ff0000,
-                -2px 0 #00ff00,
-                0 2px #0088ff,
-                0 -2px #ffff00;
-            animation: rainbow-text 2s linear infinite;
+                3px 0 #ff8800,
+                -3px 0 #00ff00,
+                0 3px #0088ff,
+                0 -3px #ffff00;
+            animation: rainbow-hue 2s linear infinite;
+        }
+        
+        @keyframes rainbow-hue {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
         }
         
         @keyframes rainbow-text {
@@ -242,6 +247,217 @@
         .legend-item:hover {
             transform: translateX(10px);
         }
+        
+        /* Dong Analytics Bar Graph */
+        .analytics-section {
+            background: rgba(0, 0, 0, 0.4);
+            border: 2px solid #ff00ff;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .analytics-section h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
+        }
+        
+        .dong-analytics {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .analytics-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .bar-label {
+            width: 100px;
+            text-align: right;
+            font-size: 0.9em;
+            color: #ccc;
+            text-transform: capitalize;
+        }
+        
+        .bar-track {
+            flex: 1;
+            height: 25px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0088, #ff00ff);
+            border-radius: 5px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+        }
+        
+        .bar-value {
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 5px #000;
+        }
+        
+        .fenthouse .bar-fill {
+            background: linear-gradient(90deg, #00ff88, #ff00ff, #ff0000);
+            animation: rainbow-hue 3s linear infinite;
+        }
+        
+        /* Chaos Progress Bar */
+        .chaos-meter-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 20px auto 0;
+        }
+        
+        .chaos-progress-bar {
+            width: 100%;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #ff00ff;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .chaos-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88 0%, #ffff00 25%, #ff8800 50%, #ff0000 75%, #ff00ff 100%);
+            border-radius: 13px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+        
+        .chaos-progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        .chaos-meter-label {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 0.9em;
+            color: #888;
+        }
+        
+        /* Violent shaking for chaos > 100 */
+        .chaos-meter-container.shaking-low {
+            animation: violent-shake 0.5s ease-in-out infinite;
+        }
+        
+        .chaos-meter-container.shaking-medium {
+            animation: violent-shake 0.3s ease-in-out infinite;
+        }
+        
+        .chaos-meter-container.shaking-high {
+            animation: violent-shake 0.15s ease-in-out infinite;
+        }
+        
+        .chaos-meter-container.shaking-extreme {
+            animation: violent-shake 0.08s ease-in-out infinite;
+        }
+        
+        @keyframes violent-shake {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            10% { transform: translateX(-5px) rotate(-1deg); }
+            20% { transform: translateX(5px) rotate(1deg); }
+            30% { transform: translateX(-8px) rotate(-2deg); }
+            40% { transform: translateX(8px) rotate(2deg); }
+            50% { transform: translateX(-5px) rotate(-1deg); }
+            60% { transform: translateX(5px) rotate(1deg); }
+            70% { transform: translateX(-3px) rotate(-0.5deg); }
+            80% { transform: translateX(3px) rotate(0.5deg); }
+            90% { transform: translateX(-1px) rotate(-0.25deg); }
+        }
+        
+        /* CClub's Favorite Word Banner */
+        .favorite-word-banner {
+            background: linear-gradient(135deg, #ff00ff 0%, #8800ff 50%, #ff0088 100%);
+            border: 3px solid #fff;
+            border-radius: 20px;
+            padding: 25px;
+            margin: 20px auto 30px;
+            max-width: 600px;
+            text-align: center;
+            box-shadow: 0 0 40px rgba(255, 0, 255, 0.5);
+            animation: banner-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes banner-pulse {
+            0%, 100% { box-shadow: 0 0 40px rgba(255, 0, 255, 0.5); }
+            50% { box-shadow: 0 0 60px rgba(255, 0, 255, 0.8), 0 0 80px rgba(255, 0, 255, 0.4); }
+        }
+        
+        .banner-label {
+            font-size: 0.9em;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #fff;
+        }
+        
+        .banner-word {
+            font-size: 3.5em;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 20px #fff, 0 0 40px #ff00ff, 0 0 60px #ff00ff;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            animation: word-glow 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes word-glow {
+            0%, 100% { text-shadow: 0 0 20px #fff, 0 0 40px #ff00ff; }
+            50% { text-shadow: 0 0 30px #fff, 0 0 60px #ff00ff, 0 0 80px #ff00ff; }
+        }
+        
+        .banner-count {
+            font-size: 1.2em;
+            color: #fff;
+            margin-top: 10px;
+            text-shadow: 0 0 5px #fff;
+        }
+        
+        .top-words {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .top-word-item {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            color: #fff;
+        }
 </style>
 </head>
 <body>
@@ -254,6 +470,18 @@
         <div class="chaos-label">CURRENT CHAOS LEVEL</div>
         <div class="chaos-score" id="chaosScore">0.0</div>
         <div class="chaos-status" id="chaosStatus">Initializing...</div>
+        
+        <!-- Chaos Progress Bar -->
+        <div class="chaos-meter-container" id="chaosMeterContainer">
+            <div class="chaos-progress-bar">
+                <div class="chaos-progress-fill" id="chaosProgressFill" style="width: 0%"></div>
+            </div>
+            <div class="chaos-meter-label" id="chaosMeterLabel">0 / 42069</div>
+        </div>
+        
+        <div class="fenthouse-countdown" id="fenthouseCountdown" style="display: none; margin-top: 15px; padding: 10px 20px; background: linear-gradient(90deg, #ff0000, #ff8800, #ffff00, #00ff88, #0088ff, #8800ff); color: #000; font-weight: bold; border-radius: 10px; font-family: 'Courier New', monospace; font-size: 1.5em; text-shadow: none;">
+            ⏰ FENTHOUSE EXPIRES: <span id="countdownTimer">--:--:--</span>
+        </div>
     </div>
     
     <div class="metrics-grid">
@@ -276,6 +504,18 @@
         </div>
         
         <div class="metric-card">
+            <div class="metric-icon">🌭</div>
+            <div class="metric-value" id="glizzCount">0</div>
+            <div class="metric-label">Glizzy Count</div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="metric-icon">🍆</div>
+            <div class="metric-value" id="dongCount">0</div>
+            <div class="metric-label">Dong+ Variants (24h)</div>
+        </div>
+        
+        <div class="metric-card">
             <div class="metric-icon">📊</div>
             <div class="metric-value" id="chat1hour">0</div>
             <div class="metric-label">Messages (1 hour)</div>
@@ -285,6 +525,28 @@
             <div class="metric-icon">🗄️</div>
             <div class="metric-value" id="indexerCount">-</div>
             <div class="metric-label">Matrix Indexed Events</div>
+        </div>
+    </div>
+    
+    <!-- CClub's Favorite Word Banner -->
+    <div class="favorite-word-banner" id="favoriteWordBanner" style="display: none;">
+        <div class="banner-label">🏆 CCLUB'S FAVORITE WORD</div>
+        <div class="banner-word" id="favoriteWord">...</div>
+        <div class="banner-count" id="favoriteWordCount">0 mentions</div>
+        <div class="top-words" id="topWords"></div>
+    </div>
+    
+    <!-- Dong Analytics Bar Graph -->
+    <div class="analytics-section">
+        <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 20px;">
+            <h3 style="margin: 0;">🍆 Dong Variant Analytics</h3>
+            <select id="dongTimeRange" style="background: rgba(0,0,0,0.5); border: 1px solid #ff00ff; color: #fff; padding: 8px 12px; border-radius: 5px; font-family: 'Courier New', monospace; cursor: pointer;">
+                <option value="24h">Last 24 Hours</option>
+                <option value="all">All Time</option>
+            </select>
+        </div>
+        <div class="dong-analytics" id="dongAnalytics">
+            <!-- Bars will be rendered here -->
         </div>
     </div>
     
@@ -366,9 +628,51 @@
                 statusEl.textContent = data.status || getChaosLabel(newScore);
                 statusEl.className = 'chaos-status ' + chaosClass;
                 
-                // Update metrics with animation
-                const metricsIds = ['chat5min', 'door10min', 'pizzaCount', 'chat1hour'];
-                const metricData = [data.chat_velocity_5min, data.door_events_10min, data.pizza_count, data.chat_velocity_1hour];
+                // Update Chaos Progress Bar
+                const progressFill = document.getElementById('chaosProgressFill');
+                const meterLabel = document.getElementById('chaosMeterLabel');
+                const meterContainer = document.getElementById('chaosMeterContainer');
+                
+                // Calculate width - logarithmic scale for better visualization
+                // At 42069 chaos = 100% bar, anything beyond shows as full
+                let progressWidth = Math.min((newScore / 42069) * 100, 100);
+                if (newScore > 42069) {
+                    progressWidth = 100;
+                }
+                progressFill.style.width = progressWidth + '%';
+                
+                // Update label with current/max
+                const targetValue = newScore >= 42069 ? '∞' : '42069';
+                meterLabel.textContent = `${Math.floor(newScore)} / ${targetValue}`;
+                
+                // Apply violent shaking when chaos > 100, increasing intensity up to 42069
+                meterContainer.classList.remove('shaking-low', 'shaking-medium', 'shaking-high', 'shaking-extreme');
+                if (newScore > 100 && newScore < 42069) {
+                    if (newScore < 1000) {
+                        meterContainer.classList.add('shaking-low');
+                    } else if (newScore < 5000) {
+                        meterContainer.classList.add('shaking-medium');
+                    } else if (newScore < 20000) {
+                        meterContainer.classList.add('shaking-high');
+                    } else {
+                        meterContainer.classList.add('shaking-extreme');
+                    }
+                }
+                
+                // Update Fenthouse countdown
+                const countdownDiv = document.getElementById('fenthouseCountdown');
+                const countdownTimer = document.getElementById('countdownTimer');
+                if (data.fenthouse_countdown) {
+                    const { hours, minutes, seconds } = data.fenthouse_countdown;
+                    countdownDiv.style.display = 'inline-block';
+                    countdownTimer.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                } else {
+                    countdownDiv.style.display = 'none';
+                }
+                
+                // Update metrics with animation (including glizz and dong!)
+                const metricsIds = ['chat5min', 'door10min', 'pizzaCount', 'glizzCount', 'dongCount', 'chat1hour'];
+                const metricData = [data.chat_velocity_5min, data.door_events_10min, data.pizza_count, data.glizz_count, data.dong_count, data.chat_velocity_1hour];
                 
                 metricsIds.forEach((id, index) => {
                     const el = document.getElementById(id);
@@ -395,6 +699,27 @@
                     indexerEl.textContent = data.matrix_indexer_messages.toLocaleString();
                 }
                 
+                // Update Dong Analytics Bar Graph
+                renderDongAnalytics(data);
+                
+                // Update Favorite Word Banner
+                if (data.favorite_word) {
+                    const banner = document.getElementById('favoriteWordBanner');
+                    const wordEl = document.getElementById('favoriteWord');
+                    const countEl = document.getElementById('favoriteWordCount');
+                    const topWordsEl = document.getElementById('topWords');
+                    
+                    banner.style.display = 'block';
+                    wordEl.textContent = data.favorite_word.word;
+                    countEl.textContent = data.favorite_word.count.toLocaleString() + ' mentions';
+                    
+                    if (data.top_words && data.top_words.length > 1) {
+                        topWordsEl.innerHTML = data.top_words.slice(1, 4).map(w => 
+                            `<span class="top-word-item">${w.word}: ${w.count.toLocaleString()}</span>`
+                        ).join('');
+                    }
+                }
+                
                 lastData = data;
             } catch (error) {
                 console.error('Failed to fetch metrics:', error);
@@ -403,9 +728,42 @@
             }
         }
         
-        // Update every 5 seconds
+        // Update every 1 second for smooth real-time chaos
         updateMetrics();
-        setInterval(updateMetrics, 5000);
+        setInterval(updateMetrics, 1000);
+        
+        // Function to render dong analytics
+        function renderDongAnalytics(data) {
+            const timeRange = document.getElementById('dongTimeRange').value;
+            const analyticsData = timeRange === 'all' ? data.dong_analytics_all_time : data.dong_analytics;
+            
+            if (analyticsData) {
+                const analyticsEl = document.getElementById('dongAnalytics');
+                const variants = Object.entries(analyticsData).sort((a, b) => b[1] - a[1]);
+                const maxCount = Math.max(...variants.map(v => v[1]), 1);
+                
+                analyticsEl.innerHTML = variants.map(([name, count]) => {
+                    const width = (count / maxCount * 100).toFixed(1);
+                    return `
+                        <div class="analytics-bar">
+                            <div class="bar-label">${name}</div>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: ${width}%">
+                                    <span class="bar-value">${count.toLocaleString()}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') || '<div style="text-align: center; color: #666;">No data available</div>';
+            }
+        }
+        
+        // Dong time range dropdown handler
+        document.getElementById('dongTimeRange')?.addEventListener('change', function() {
+            if (lastData) {
+                renderDongAnalytics(lastData);
+            }
+        });
         
         // Keyboard shortcut for chaos
         document.addEventListener('keydown', (e) => {

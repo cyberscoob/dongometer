@@ -467,22 +467,40 @@ def init_db():
     conn.commit()
     conn.close()
 
+def get_fenthouse_status():
+    """Check if Fenthouse lock is active and return status info"""
+    try:
+        if os.path.exists('/tmp/dongometer_lock'):
+            with open('/tmp/dongometer_lock', 'r') as f:
+                content = f.read().strip()
+                parts = content.split(',')
+                if len(parts) >= 2:
+                    lock_time = int(parts[0].strip())
+                    duration = int(parts[1].strip())
+                    status_msg = parts[2].strip() if len(parts) >= 3 else '🌿 FENTHOUSE ACTIVE'
+                    remaining = (lock_time + duration) - int(time.time())
+                    if remaining > 0:
+                        hours = remaining // 3600
+                        mins = (remaining % 3600) // 60
+                        secs = remaining % 60
+                        return {
+                            'active': True,
+                            'status_message': status_msg,
+                            'countdown': {'hours': hours, 'minutes': mins, 'seconds': secs, 'total_seconds': remaining},
+                            'expires_at': lock_time + duration
+                        }
+    except Exception as e:
+        print(f"Fenthouse status error: {e}")
+    return {'active': False, 'status_message': None, 'countdown': None, 'expires_at': None}
+
 def calculate_chaos_score():
     score = 0.0
     now = datetime.now()
 
-    # Check for Fenthouse lock
-    try:
-        if os.path.exists('/tmp/dongometer_lock'):
-            with open('/tmp/dongometer_lock', 'r') as f:
-                lines = f.readlines()
-                if len(lines) >= 2:
-                    lock_time = int(lines[0].strip())
-                    duration = int(lines[1].strip())
-                    if now.timestamp() < lock_time + duration:
-                        return 42069.0
-    except:
-        pass
+    # Check for Fenthouse lock - IF ACTIVE, FORCE CHAOS TO 42069
+    fenthouse = get_fenthouse_status()
+    if fenthouse['active']:
+        return 42069.0
 
     # APOCALYPSE MODE - ALL LIMITERS REMOVED
     # Try to get metrics from MongoDB indexer first
@@ -593,27 +611,11 @@ class DongometerHandler(BaseHTTPRequestHandler):
 
         now = datetime.now()
 
-        # Check for Fenthouse lock and calculate countdown
-        status = None
-        fenthouse_countdown = None
-        try:
-            if os.path.exists('/tmp/dongometer_lock'):
-                with open('/tmp/dongometer_lock', 'r') as f:
-                    lines = f.readlines()
-                    if len(lines) >= 3:
-                        lock_time = int(lines[0].strip())
-                        duration = int(lines[1].strip())
-                        lock_status = lines[2].strip()
-                        expires_at = lock_time + duration
-                        remaining = expires_at - int(now.timestamp())
-                        if remaining > 0:
-                            status = lock_status
-                            hours = remaining // 3600
-                            mins = (remaining % 3600) // 60
-                            secs = remaining % 60
-                            fenthouse_countdown = {'hours': hours, 'minutes': mins, 'seconds': secs, 'total_seconds': remaining}
-        except:
-            pass
+        # Check for Fenthouse lock status
+        fenthouse = get_fenthouse_status()
+        fenthouse_active = fenthouse['active']
+        fenthouse_countdown = fenthouse['countdown']
+        status = fenthouse['status_message'] if fenthouse_active else None
 
         # Get metrics from indexer or fallback to memory
         indexer_data = get_indexer_metrics()
@@ -682,6 +684,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
             'status': status,
             'matrix_indexer_messages': indexer_count,
             'matrix_indexer_rooms': indexer_rooms,
+            'fenthouse_active': fenthouse_active,
             'fenthouse_countdown': fenthouse_countdown
         }
         self.send_json(data)

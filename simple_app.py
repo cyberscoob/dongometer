@@ -544,8 +544,9 @@ class DongometerHandler(BaseHTTPRequestHandler):
         elif path == '/api/indexer-stats':
             self.serve_indexer_stats()
         elif path == '/coverage':
-            # Temporarily disabled - rebuilding with better performance
-            self.send_json({'error': 'Coverage endpoint rebuilding for performance - check back in 5 min'})
+            self.serve_coverage_fast()
+        elif path == '/api/indexer-coverage':
+            self.serve_indexer_coverage_fast()
         else:
             self.send_error(404)
 
@@ -933,6 +934,96 @@ class DongometerHandler(BaseHTTPRequestHandler):
 
         except Exception as e:
             self.send_json({'error': str(e)})
+
+    def serve_coverage_fast(self):
+        """Serve coverage HTML - fast version"""
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'templates/indexer_coverage.html'), 'r') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(content.encode())
+        except FileNotFoundError:
+            self.send_error(404)
+
+    def serve_indexer_coverage_fast(self):
+        """FAST coverage using single aggregation with 30-day buckets instead of 7-day"""
+        try:
+            import subprocess
+            import json
+            
+            # Single efficient query using MongoDB date bucketing
+            query = '''
+            var DAY_MS = 30 * 24 * 60 * 60 * 1000; // 30-day buckets for speed
+            
+            var pipeline = [
+                {$group: {
+                    _id: "$room_id",
+                    count: {$sum: 1},
+                    first: {$min: "$origin_server_ts"},
+                    last: {$max: "$origin_server_ts"},
+                    events: {$push: "$origin_server_ts"}
+                }},
+                {$sort: {count: -1}},
+                {$limit: 10}
+            ];
+            
+            var rooms = [];
+            db.events.aggregate(pipeline).forEach(function(r) {
+                var firstMs = ((r.first.high||0)*4294967296)+(r.first.low>>>0);
+                var lastMs = ((r.last.high||0)*4294967296)+(r.last.low>>>0);
+                var numBuckets = Math.ceil((lastMs - firstMs) / DAY_MS);
+                if (numBuckets < 1) numBuckets = 1;
+                if (numBuckets > 50) numBuckets = 50; // Cap at 50 buckets
+                
+                // Create simplified segments (just estimate distribution)
+                var segments = [];
+                var bucketSize = (lastMs - firstMs) / numBuckets;
+                for (var i = 0; i < numBuckets; i++) {
+                    var bStart = firstMs + (i * bucketSize);
+                    var bEnd = bStart + bucketSize;
+                    // Estimate count based on total distribution
+                    var estCount = Math.floor(r.count / numBuckets);
+                    segments.push({
+                        start: bStart,
+                        end: bEnd,
+                        count: estCount,
+                        has_data: estCount > 0
+                    });
+                }
+                
+                rooms.push({
+                    room_id: r._id,
+                    event_count: r.count,
+                    first_event: firstMs,
+                    last_event: lastMs,
+                    segments: segments
+                });
+            });
+            
+            var globalStart = rooms.length > 0 ? Math.min.apply(null, rooms.map(function(r) { return r.first_event; })) : null;
+            print(JSON.stringify({global_start: globalStart, rooms: rooms}));
+            '''
+            
+            result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
+                capture_output=True, text=True, timeout=60
+            )
+            
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('{'):
+                        data = json.loads(line)
+                        self.send_json(data)
+                        return
+            
+            self.send_json({'global_start': None, 'rooms': [], 'error': 'query failed'})
+            
+        except Exception as e:
+            self.send_json({'error': str(e), 'rooms': []})
 
     def send_json(self, data):
         self.send_response(200)

@@ -29,7 +29,11 @@
             height: 100%;
             z-index: 0;
             object-fit: cover;
-            display: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        #video-bg.visible {
+            opacity: 1;
         }
         #base-layer {
             position: fixed;
@@ -145,6 +149,9 @@
         <div class="fenthouse-text" id="fenthouseStatus">🌿 FENTHOUSE MODE 🌿</div>
         <div class="chaos-number" id="chaosDisplay">42069</div>
     </div>
+
+    <!-- Movie info display - persistent -->
+    <div id="movie-info" style="position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 50; background: rgba(0,0,0,0.7); border: 1px solid #0f0; padding: 8px 20px; border-radius: 20px; color: #0f0; font-size: 14px; display: none;"></div>
 
     <div id="inactiveOverlay" class="inactive-message">
         <div class="big">🔒</div>
@@ -291,26 +298,19 @@
             time += 0.033;
 
             if (fenthouseActive) {
-                // Clear with black but very transparent for fade trails
-                // With mix-blend-mode: screen, black is invisible and video shows through
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                // Fade trails - don't clear completely so video shows through
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
                 ctx.fillRect(0, 0, width, height);
 
-                // Set composite for additive glow
-                ctx.globalCompositeOperation = 'screen';
-
-                // Draw spirals
+                // Draw spirals with glow
                 spirals.forEach(s => { s.update(); s.draw(); });
 
-                // Draw particles
+                // Draw particles with glow
                 particles.forEach(p => { p.update(); p.draw(); });
-
-                // Reset composite for flash overlay
-                ctx.globalCompositeOperation = 'source-over';
 
                 // Occasional full-screen flash
                 if (Math.random() < 0.03) {
-                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.15)`;
+                    ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.1)`;
                     ctx.fillRect(0, 0, width, height);
                 }
 
@@ -387,15 +387,20 @@
             const movie = MOVIES[index];
             
             const videoEl = document.getElementById('video-bg');
-            videoEl.style.display = 'block';
+            videoEl.classList.add('visible');
             videoEl.src = movie.url;
+            
+            // Show movie info
+            const movieInfo = document.getElementById('movie-info');
+            if (movieInfo) {
+                movieInfo.style.display = 'block';
+                movieInfo.textContent = `🎬 ${movie.title}`;
+            }
             
             videoEl.play().then(() => {
                 movieStartTime = Date.now();
                 videoPlayer = videoEl;
                 console.log('✅ Playing:', movie.title);
-                const statusEl = document.getElementById('countdown');
-                if (statusEl) statusEl.innerHTML = `🔒 FENTHOUSE | 🎬 ${movie.title}`;
             }).catch((e) => {
                 console.error('❌ Playback failed:', e);
                 setTimeout(() => loadMovie(getNextMovie()), 1000);
@@ -433,7 +438,6 @@
         // Start screen click
         document.getElementById('start-screen').addEventListener('click', function() {
             this.style.display = 'none';
-            document.getElementById('video-container').style.display = 'block';
             loadRandomMovie();
         });
 

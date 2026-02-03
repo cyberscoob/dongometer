@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Indexer Activity - CClub Matrix Archive</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #4ecca3; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }
+        .stat-card { background: #16213e; padding: 15px; border-radius: 8px; }
+        .stat-label { color: #888; font-size: 0.9em; }
+        .stat-value { font-size: 1.8em; font-weight: bold; color: #4ecca3; }
+        .chart-container { background: #16213e; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .channel-list { background: #16213e; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .channel-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
+        .channel-name { color: #4ecca3; }
+        .channel-count { color: #eee; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 CClub Matrix Archive - Indexer Activity</h1>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Messages</div>
+                <div class="stat-value" id="total-messages">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Active Channels</div>
+                <div class="stat-value" id="active-channels">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Indexed Since</div>
+                <div class="stat-value" id="index-since">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Messages/Hour</div>
+                <div class="stat-value" id="msg-rate">-</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="ingestionChart"></canvas>
+        </div>
+
+        <div class="channel-list" id="channel-list">
+            <h3>Channel Activity (Anonymized)</h3>
+            <div id="channels">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        // Fake name mappings for privacy
+        const channelNames = {
+            '!pYoawuzxaFxYhOVtjN:cclub.cs.wmich.edu': 'The Grand Hall',
+            '!RfkQkxlYocxeqmrBXI:cclub.cs.wmich.edu': 'The Laboratory',
+            '!SASTdXhcIphYEpMGty:cclub.cs.wmich.edu': 'The Observatory',
+            '!xrWBUUXQVKbWIuvMDi:cclub.cs.wmich.edu': 'The Workshop',
+            '!CUqbYAuoIkIOvzXnCA:cclub.cs.wmich.edu': 'The Archives',
+            '!EjjqonNwfCfQEvxjmG:cclub.cs.wmich.edu': 'The Commons',
+            '!ngdIUcFszKkRsppRwp:cclub.cs.wmich.edu': 'The Atrium',
+            '!kMHDOGXKJmQizYEDTM:cclub.cs.wmich.edu': 'The Council Room',
+            '!FuKVmsdGDqELoLzabM:cclub.cs.wmich.edu': 'The Vault',
+            '!dkaEtUvJgNFDmbmfPL:cclub.cs.wmich.edu': 'The Study'
+        };
+
+        async function loadData() {
+            try {
+                const response = await fetch('/api/indexer-stats');
+                const data = await response.json();
+                
+                // Update stats
+                document.getElementById('total-messages').textContent = data.total_messages.toLocaleString();
+                document.getElementById('active-channels').textContent = data.unique_rooms;
+                document.getElementById('index-since').textContent = data.first_message_date;
+                document.getElementById('msg-rate').textContent = data.messages_per_hour.toFixed(1);
+                
+                // Update channel list
+                const channelsDiv = document.getElementById('channels');
+                channelsDiv.innerHTML = data.room_counts.map(room => {
+                    const fakeName = channelNames[room.room_id] || 'Channel ' + room.room_id.substring(0, 8);
+                    return `<div class="channel-item">
+                        <span class="channel-name">${fakeName}</span>
+                        <span class="channel-count">${room.count.toLocaleString()}</span>
+                    </div>`;
+                }).join('');
+                
+                // Create chart
+                const ctx = document.getElementById('ingestionChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.timeline.map(t => t.hour),
+                        datasets: [{
+                            label: 'Messages Ingested',
+                            data: data.timeline.map(t => t.count),
+                            borderColor: '#4ecca3',
+                            backgroundColor: 'rgba(78, 204, 163, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Message Ingestion Over Time (Last 24 Hours)',
+                                color: '#eee'
+                            },
+                            legend: {
+                                labels: { color: '#eee' }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: '#333' },
+                                ticks: { color: '#888' }
+                            },
+                            x: {
+                                grid: { color: '#333' },
+                                ticks: { color: '#888' }
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+        
+        loadData();
+    </script>
+</body>
+</html>

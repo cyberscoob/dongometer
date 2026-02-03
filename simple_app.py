@@ -537,8 +537,12 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_dashboard()
         elif path == '/manifold':
             self.serve_manifold()
+        elif path == '/indexer':
+            self.serve_indexer_dashboard()
         elif path == '/api/metrics':
             self.serve_metrics()
+        elif path == '/api/indexer-stats':
+            self.serve_indexer_stats()
         else:
             self.send_error(404)
 
@@ -697,6 +701,101 @@ class DongometerHandler(BaseHTTPRequestHandler):
 
         self.send_json({'success': True, 'chaos_score': calculate_chaos_score()})
 
+    def serve_indexer_dashboard(self):
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'templates/indexer_dashboard.html'), 'r') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(content.encode())
+        except FileNotFoundError:
+            self.send_error(404)
+    
+    def serve_indexer_stats(self):
+        """Serve indexer statistics with anonymized channel names"""
+        try:
+            import subprocess
+            import json
+            
+            # Get total messages
+            result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', 
+                 'print(db.events.estimatedDocumentCount())'],
+                capture_output=True, text=True, timeout=10
+            )
+            total_messages = int(result.stdout.strip()) if result.returncode == 0 else 0
+            
+            # Get room counts (top 10)
+            query = '''
+            var roomCounts = {};
+            db.events.find({}, {room_id: 1}).forEach(function(doc) {
+                roomCounts[doc.room_id] = (roomCounts[doc.room_id] || 0) + 1;
+            });
+            var sorted = Object.entries(roomCounts).sort(function(a, b) { return b[1] - a[1]; });
+            print(JSON.stringify(sorted.slice(0, 10).map(function(x) { return {room_id: x[0], count: x[1]}; })));
+            '''
+            result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
+                capture_output=True, text=True, timeout=30
+            )
+            room_counts = json.loads(result.stdout.strip().split('\n')[-1]) if result.returncode == 0 else []
+            
+            # Get first message date
+            query = '''
+            var doc = db.events.find().sort({origin_server_ts: 1}).limit(1).next();
+            var ts = doc.origin_server_ts;
+            var high = ts.high || 0;
+            var low = ts.low || ts;
+            var timestamp = (high * 4294967296) + (low >>> 0);
+            print(new Date(timestamp).toISOString().split('T')[0]);
+            '''
+            result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
+                capture_output=True, text=True, timeout=10
+            )
+            first_date = result.stdout.strip().split('\n')[-1] if result.returncode == 0 else 'Unknown'
+            
+            # Get hourly timeline (last 24 hours)
+            day_ago = int((datetime.now() - timedelta(hours=24)).timestamp() * 1000)
+            query = f'''
+            var hours = {};
+            var dayAgo = {day_ago};
+            db.events.find({{origin_server_ts: {{$gt: dayAgo}}}}, {{origin_server_ts: 1}}).forEach(function(doc) {{
+                var ts = doc.origin_server_ts;
+                var high = ts.high || 0;
+                var low = ts.low || ts;
+                var timestamp = (high * 4294967296) + (low >>> 0);
+                var hour = new Date(timestamp).getHours();
+                hours[hour] = (hours[hour] || 0) + 1;
+            }});
+            var result = [];
+            for (var i = 0; i < 24; i++) {{
+                result.push({{hour: i + ':00', count: hours[i] || 0}});
+            }}
+            print(JSON.stringify(result));
+            '''
+            result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
+                capture_output=True, text=True, timeout=30
+            )
+            timeline = json.loads(result.stdout.strip().split('\n')[-1]) if result.returncode == 0 else []
+            
+            # Calculate hourly rate
+            hourly_rate = sum(t['count'] for t in timeline) / 24 if timeline else 0
+            
+            data = {
+                'total_messages': total_messages,
+                'unique_rooms': len(room_counts),
+                'first_message_date': first_date,
+                'messages_per_hour': hourly_rate,
+                'room_counts': room_counts,
+                'timeline': timeline
+            }
+            self.send_json(data)
+        except Exception as e:
+            self.send_json({'error': str(e)})
+    
     def send_json(self, data):
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
@@ -709,4 +808,5 @@ if __name__ == '__main__':
     server = HTTPServer(('0.0.0.0', 5000), DongometerHandler)
     print("🍆 The Dongometer is live on http://localhost:5000")
     print("🍕 Pizza count now uses MongoDB (dynamic, no more crazy multipliers)")
+    print("📊 Indexer dashboard at http://localhost:5000/indexer")
     server.serve_forever()

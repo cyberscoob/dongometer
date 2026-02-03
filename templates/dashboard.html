@@ -35,6 +35,26 @@
             font-size: 1.2em;
         }
         
+        .nav-links {
+            margin-top: 15px;
+        }
+        
+        .nav-links a {
+            color: #ff00ff;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 8px 15px;
+            border: 1px solid #ff00ff;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-links a:hover {
+            background: #ff00ff;
+            color: #fff;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        }
+        
         .chaos-meter {
             background: rgba(0, 0, 0, 0.3);
             border: 2px solid #ff00ff;
@@ -464,6 +484,11 @@
     <div class="header">
         <h1>🍆 THE DONGOMETER 🍆</h1>
         <p class="subtitle">Real-time Donghouse Chaos Metrics</p>
+        <div class="nav-links">
+            <a href="/">📊 Dashboard</a>
+            <a href="/manifold">🌌 Dong Manifold</a>
+            <a href="/indexer">📈 Indexer</a>
+        </div>
     </div>
     
     <div class="chaos-meter">

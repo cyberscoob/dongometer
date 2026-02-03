@@ -30,6 +30,83 @@
             margin-bottom: 10px;
         }
         
+        .manifold-cta {
+            text-decoration: none;
+            display: block;
+            margin-bottom: 30px;
+        }
+        
+        .manifold-promo {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(255, 0, 255, 0.1) 100%);
+            border: 2px solid #ff00ff;
+            border-radius: 20px;
+            padding: 25px 30px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            animation: manifold-pulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes manifold-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 0, 255, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(255, 0, 255, 0.6), 0 0 60px rgba(0, 255, 136, 0.3); }
+        }
+        
+        .manifold-promo:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 15px 50px rgba(255, 0, 255, 0.5), 0 0 80px rgba(0, 255, 136, 0.4);
+            border-color: #00ff88;
+        }
+        
+        .manifold-glow {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,0,255,0.1) 0%, transparent 70%);
+            animation: rotate-glow 10s linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes rotate-glow {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .manifold-icon {
+            font-size: 3em;
+            filter: drop-shadow(0 0 15px #ff00ff);
+            animation: icon-bounce 2s ease-in-out infinite;
+            z-index: 1;
+        }
+        
+        @keyframes icon-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .manifold-text {
+            display: flex;
+            flex-direction: column;
+            z-index: 1;
+        }
+        
+        .manifold-text strong {
+            font-size: 1.4em;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255, 0, 255, 0.8);
+            margin-bottom: 5px;
+        }
+        
+        .manifold-text span {
+            font-size: 0.9em;
+            color: #aaa;
+        }
+        
         .header .subtitle {
             color: #888;
             font-size: 1.2em;
@@ -490,6 +567,17 @@
             <a href="/indexer">📈 Indexer</a>
         </div>
     </div>
+    
+    <a href="/manifold" class="manifold-cta">
+        <div class="manifold-promo">
+            <div class="manifold-glow"></div>
+            <span class="manifold-icon">🌊</span>
+            <div class="manifold-text">
+                <strong>🌌 ENTER THE DONG MANIFOLD</strong>
+                <span>Real-time chaos visualization with live particle effects →</span>
+            </div>
+        </div>
+    </a>
     
     <div class="chaos-meter">
         <div class="chaos-label">CURRENT CHAOS LEVEL</div>

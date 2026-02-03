@@ -13,9 +13,12 @@
         .stat-value { font-size: 1.8em; font-weight: bold; color: #4ecca3; }
         .chart-container { background: #16213e; padding: 20px; border-radius: 8px; margin: 20px 0; }
         .channel-list { background: #16213e; padding: 15px; border-radius: 8px; margin: 20px 0; }
-        .channel-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #333; }
-        .channel-name { color: #4ecca3; }
-        .channel-count { color: #eee; }
+        .channel-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; align-items: center; }
+        .channel-info { flex: 1; }
+        .channel-name { color: #4ecca3; font-weight: bold; }
+        .channel-dates { font-size: 0.8em; color: #666; margin-top: 3px; }
+        .channel-count { color: #eee; font-size: 1.2em; font-weight: bold; text-align: right; }
+        .count-label { font-size: 0.7em; color: #888; }
     </style>
 </head>
 <body>
@@ -81,9 +84,17 @@
                 const channelsDiv = document.getElementById('channels');
                 channelsDiv.innerHTML = data.room_counts.map(room => {
                     const fakeName = channelNames[room.room_id] || 'Channel ' + room.room_id.substring(0, 8);
+                    const firstMsg = room.first_message ? new Date(room.first_message).toLocaleDateString() : 'Unknown';
+                    const lastMsg = room.last_message ? new Date(room.last_message).toLocaleDateString() : 'Unknown';
                     return `<div class="channel-item">
-                        <span class="channel-name">${fakeName}</span>
-                        <span class="channel-count">${room.count.toLocaleString()}</span>
+                        <div class="channel-info">
+                            <div class="channel-name">${fakeName}</div>
+                            <div class="channel-dates">${firstMsg} → ${lastMsg}</div>
+                        </div>
+                        <div class="channel-count">
+                            ${room.count.toLocaleString()}
+                            <div class="count-label">messages</div>
+                        </div>
                     </div>`;
                 }).join('');
                 

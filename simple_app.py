@@ -726,14 +726,34 @@ class DongometerHandler(BaseHTTPRequestHandler):
             )
             total_messages = int(result.stdout.strip()) if result.returncode == 0 else 0
             
-            # Get room counts (top 10)
+            # Get room counts with first/last message dates (top 10)
             query = '''
-            var roomCounts = {};
-            db.events.find({}, {room_id: 1}).forEach(function(doc) {
-                roomCounts[doc.room_id] = (roomCounts[doc.room_id] || 0) + 1;
+            var pipeline = [
+                {$group: {
+                    _id: "$room_id",
+                    count: {$sum: 1},
+                    first_ts: {$min: "$origin_server_ts"},
+                    last_ts: {$max: "$origin_server_ts"}
+                }},
+                {$sort: {count: -1}},
+                {$limit: 10}
+            ];
+            var results = db.events.aggregate(pipeline);
+            var rooms = [];
+            results.forEach(function(doc) {
+                function toDate(ts) {
+                    var high = ts.high || 0;
+                    var low = ts.low || ts;
+                    return new Date((high * 4294967296) + (low >>> 0));
+                }
+                rooms.push({
+                    room_id: doc._id,
+                    count: doc.count,
+                    first_message: toDate(doc.first_ts).toISOString(),
+                    last_message: toDate(doc.last_ts).toISOString()
+                });
             });
-            var sorted = Object.entries(roomCounts).sort(function(a, b) { return b[1] - a[1]; });
-            print(JSON.stringify(sorted.slice(0, 10).map(function(x) { return {room_id: x[0], count: x[1]}; })));
+            print(JSON.stringify(rooms));
             '''
             result = subprocess.run(
                 ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],

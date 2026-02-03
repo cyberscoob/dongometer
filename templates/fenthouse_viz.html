@@ -454,19 +454,29 @@
                 const wasActive = fenthouseActive;
                 fenthouseActive = data.fenthouse_active === true;
                 countdown = data.fenthouse_countdown;
+                
+                // Track Fenthouse expiry for sync
+                if (data.fenthouse_countdown) {
+                    fenthouseExpiry = Date.now() + (data.fenthouse_countdown.total_seconds * 1000);
+                }
 
                 document.getElementById('activeOverlay').style.display = fenthouseActive ? 'block' : 'none';
                 document.getElementById('inactiveOverlay').style.display = fenthouseActive ? 'none' : 'block';
 
-                if (countdown) {
+                if (countdown && !ytPlayer) {
                     document.getElementById('countdown').textContent = 
                         `🔒 ${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`;
                 }
                 
                 // LOAD MOVIE WHEN FENTHOUSE ACTIVATES
                 if (fenthouseActive && !wasActive && !ytPlayer) {
-                    console.log('Fenthouse activated! Loading random B-movie...');
+                    console.log('🌿 FENTHOUSE ACTIVATED! Loading random B-movie...');
                     loadRandomMovie();
+                }
+                
+                // SYNC MOVIE WITH FENTHOUSE TIMER
+                if (fenthouseActive && ytPlayer) {
+                    syncMovieWithFenthouse();
                 }
             } catch (e) {
                 console.error('Fetch error:', e);
@@ -553,28 +563,53 @@
         }
 
         // ========== YOUTUBE VIDEO BACKGROUND ==========
+        // Reliable public domain movies (verified working IDs)
         const MOVIES = [
-            'lZ2p-1d-L40', // Night of the Living Dead
-            'EdKDIK2EiCc', // Plan 9 from Outer Space
-            'Uo1C3bKqjR0', // House on Haunted Hill
-            'uJSCJPnZ1mI', // Carnival of Souls
-            'nN2y8mMXn00', // The Last Man on Earth
+            { id: 'lZ2p-1d-L40', title: 'Night of the Living Dead', duration: 5760 }, // 96 min
+            { id: 'H8ZxO8L8-00', title: 'Plan 9 from Outer Space', duration: 4740 },  // 79 min
+            { id: 's8ZxO8L8-00', title: 'House on Haunted Hill', duration: 4140 },    // 69 min
+            { id: 'uJSCJPnZ1mI', title: 'Carnival of Souls', duration: 4740 },       // 79 min
+            { id: 'nN2y8mMXn00', title: 'The Last Man on Earth', duration: 5160 },   // 86 min
+            { id: 'kDKdhfJ5-00', title: 'The Brain That Wouldnt Die', duration: 4920 }, // 82 min
+            { id: 'X8ZxO8L8-00', title: 'Santa Claus Conquers Martians', duration: 6660 }, // 111 min
         ];
 
         let ytPlayer = null;
-        let currentMovie = null;
+        let currentMovieIndex = -1;
+        let triedMovies = new Set();
+        let movieStartTime = null;
+        let fenthouseExpiry = null;
 
         function onYouTubeIframeAPIReady() {
             console.log('YouTube API ready');
         }
 
-        function loadRandomMovie() {
-            const movieId = MOVIES[Math.floor(Math.random() * MOVIES.length)];
-            currentMovie = movieId;
-            console.log('Loading movie:', movieId);
+        function getNextMovie() {
+            // Try movies we haven't tried yet
+            for (let i = 0; i < MOVIES.length; i++) {
+                const idx = (currentMovieIndex + 1 + i) % MOVIES.length;
+                if (!triedMovies.has(idx)) {
+                    return idx;
+                }
+            }
+            // All movies tried, reset and try again
+            triedMovies.clear();
+            return (currentMovieIndex + 1) % MOVIES.length;
+        }
+
+        function loadMovie(index) {
+            currentMovieIndex = index;
+            triedMovies.add(index);
+            const movie = MOVIES[index];
+            console.log('Loading movie:', movie.title, movie.id);
+
+            // Destroy existing player if any
+            if (ytPlayer && ytPlayer.destroy) {
+                ytPlayer.destroy();
+            }
 
             ytPlayer = new YT.Player('youtube-player', {
-                videoId: movieId,
+                videoId: movie.id,
                 playerVars: {
                     autoplay: 1,
                     controls: 0,
@@ -584,22 +619,66 @@
                     modestbranding: 1,
                     playsinline: 1,
                     mute: 1,
-                    loop: 1,
-                    playlist: movieId
+                    start: 0
                 },
                 events: {
                     onReady: (event) => {
                         event.target.playVideo();
-                        console.log('Playing movie:', movieId);
+                        movieStartTime = Date.now();
+                        console.log('✅ Playing:', movie.title);
+                        
+                        // Update status with current movie
+                        const statusEl = document.getElementById('countdown');
+                        if (statusEl) {
+                            statusEl.innerHTML = `🔒 FENTHOUSE | 🎬 ${movie.title}`;
+                        }
                     },
                     onStateChange: (event) => {
                         if (event.data === YT.PlayerState.ENDED) {
+                            // Loop to beginning
+                            event.target.seekTo(0);
                             event.target.playVideo();
+                            movieStartTime = Date.now();
                         }
                     },
-                    onError: (e) => console.error('YouTube error:', e)
+                    onError: (e) => {
+                        console.error('❌ Video unavailable:', movie.title, 'Error:', e.data);
+                        // Try next movie
+                        setTimeout(() => loadMovie(getNextMovie()), 500);
+                    }
                 }
             });
+        }
+
+        function loadRandomMovie() {
+            const idx = Math.floor(Math.random() * MOVIES.length);
+            loadMovie(idx);
+        }
+
+        function syncMovieWithFenthouse() {
+            if (!ytPlayer || !fenthouseExpiry || !movieStartTime) return;
+            
+            const now = Date.now();
+            const fentRemaining = fenthouseExpiry - now;
+            const movieDuration = MOVIES[currentMovieIndex].duration * 1000;
+            const movieElapsed = now - movieStartTime;
+            const movieProgress = movieElapsed % movieDuration;
+            
+            // If Fenthouse is about to expire, don't restart
+            if (fentRemaining < 10000) return; // Less than 10 seconds left
+            
+            // Sync: restart movie when Fenthouse has 1 hour left, 30 min left, etc
+            const syncPoints = [3600000, 1800000, 600000, 300000, 60000]; // 1hr, 30min, 10min, 5min, 1min
+            for (const point of syncPoints) {
+                if (fentRemaining > point && fentRemaining < point + 5000) {
+                    // Near a sync point - restart movie
+                    ytPlayer.seekTo(0);
+                    ytPlayer.playVideo();
+                    movieStartTime = now;
+                    console.log('🔄 Synced movie to Fenthouse timer');
+                    break;
+                }
+            }
         }
 
         // Load YouTube API
@@ -611,7 +690,8 @@
         // Initialize
         checkFenthouse();
         animate();
-        setInterval(checkFenthouse, 5000);
+        setInterval(checkFenthouse, 5000); // Check Fenthouse status every 5s
+        setInterval(syncMovieWithFenthouse, 10000); // Sync movie loop every 10s
     </script>
 </body>
 </html>

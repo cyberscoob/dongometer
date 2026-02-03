@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 FENTVIZ ULTIMATE 🌿 | YouTube + WebGL Shader Pipeline</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+        #glCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #videoCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.8;
+        }
+        #youtube-player {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 640px;
+            height: 360px;
+            pointer-events: none;
+            opacity: 0;
+        }
+        .overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+            z-index: 100;
+            mix-blend-mode: difference;
+        }
+        .fenthouse-text {
+            font-size: 80px;
+            font-weight: bold;
+            text-transform: uppercase;
+            animation: rainbow 0.5s linear infinite, shake 0.1s ease-in-out infinite, glitch-text 0.15s infinite;
+            text-shadow: 
+                -8px 0 #ff0000, 
+                8px 0 #00ffff, 
+                0 0 50px currentColor, 
+                0 0 100px currentColor, 
+                0 0 200px currentColor;
+            letter-spacing: 20px;
+            filter: contrast(300%) brightness(150%) saturate(200%);
+        }
+        .chaos-number {
+            font-size: 160px;
+            font-weight: bold;
+            margin-top: 30px;
+            animation: rainbow 0.3s linear infinite, hyper-pulse 0.2s ease-in-out infinite, rgb-split 0.1s infinite;
+            text-shadow: 
+                -10px 0 #ff0000, 
+                10px 0 #00ffff, 
+                0 0 80px currentColor, 
+                0 0 150px currentColor,
+                0 0 250px currentColor;
+            filter: contrast(400%) brightness(200%);
+        }
+        .movie-info {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 14px;
+            text-align: center;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border: 2px solid #0f0;
+            border-radius: 10px;
+            animation: rainbow-border 1s linear infinite;
+        }
+        .movie-title {
+            font-size: 18px;
+            color: #0f0;
+            text-shadow: 0 0 20px #0f0;
+        }
+        .status-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 40px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 3px solid #0f0;
+            border-radius: 30px;
+            color: #0f0;
+            font-size: 20px;
+            font-weight: bold;
+            z-index: 100;
+            animation: rainbow-border 1s linear infinite;
+            text-shadow: 0 0 20px #0f0;
+        }
+        .shader-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #f0f;
+            color: #f0f;
+            font-size: 12px;
+            z-index: 100;
+            border-radius: 5px;
+        }
+        .nav-link {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background: #0f0;
+            color: #000;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            pointer-events: auto;
+            z-index: 100;
+        }
+        .inactive-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+            font-size: 24px;
+            z-index: 50;
+        }
+        .inactive-message .big {
+            font-size: 48px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        @keyframes rainbow {
+            0% { color: #ff0000; }
+            16% { color: #ff8800; }
+            33% { color: #ffff00; }
+            50% { color: #00ff00; }
+            66% { color: #0088ff; }
+            83% { color: #8800ff; }
+            100% { color: #ff0000; }
+        }
+        @keyframes rainbow-border {
+            0% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
+            16% { border-color: #ff8800; box-shadow: 0 0 20px #ff8800; }
+            33% { border-color: #ffff00; box-shadow: 0 0 20px #ffff00; }
+            50% { border-color: #00ff00; box-shadow: 0 0 20px #00ff00; }
+            66% { border-color: #0088ff; box-shadow: 0 0 20px #0088ff; }
+            83% { border-color: #8800ff; box-shadow: 0 0 20px #8800ff; }
+            100% { border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            10% { transform: translate(-10px, 8px) rotate(-4deg); }
+            20% { transform: translate(10px, -8px) rotate(4deg); }
+            30% { transform: translate(-8px, 10px) rotate(-3deg); }
+            40% { transform: translate(8px, -10px) rotate(3deg); }
+            50% { transform: translate(-15px, 0) rotate(-5deg); }
+            60% { transform: translate(15px, 8px) rotate(5deg); }
+            70% { transform: translate(-8px, -15px) rotate(-3deg); }
+            80% { transform: translate(8px, 15px) rotate(3deg); }
+            90% { transform: translate(-5px, 5px) rotate(-2deg); }
+        }
+        @keyframes hyper-pulse {
+            0%, 100% { transform: scale(1) skew(0deg); filter: hue-rotate(0deg) blur(0px); }
+            20% { transform: scale(1.4) skew(8deg, -5deg); filter: hue-rotate(72deg) blur(2px); }
+            40% { transform: scale(1.7) skew(-8deg, 5deg); filter: hue-rotate(144deg) blur(0px); }
+            60% { transform: scale(1.3) skew(5deg, 8deg); filter: hue-rotate(216deg) blur(3px); }
+            80% { transform: scale(1.5) skew(-5deg, -8deg); filter: hue-rotate(288deg) blur(1px); }
+        }
+        @keyframes rgb-split {
+            0%, 100% { text-shadow: -8px 0 #ff0000, 8px 0 #00ffff, 0 0 50px #ff00ff; }
+            25% { text-shadow: -12px 0 #00ff00, 12px 0 #ff00ff, 0 0 80px #ffff00; }
+            50% { text-shadow: -10px 0 #0000ff, 10px 0 #ffff00, 0 0 100px #ff0000; }
+            75% { text-shadow: -15px 0 #ff00ff, 15px 0 #00ff00, 0 0 60px #00ffff; }
+        }
+        @keyframes glitch-text {
+            0%, 85%, 100% { opacity: 1; }
+            86% { opacity: 0.7; transform: translateX(15px) scale(1.1); }
+            87% { opacity: 0.4; transform: translateX(-15px) scale(0.9); }
+            88% { opacity: 0.6; transform: translateX(8px) scale(1.05); }
+            89% { opacity: 1; transform: translateX(0) scale(1); }
+            95% { opacity: 0.3; transform: scale(1.2) rotate(2deg); }
+            96% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="nav-link">⬅ Dashboard</a>
+    
+    <div class="shader-info" id="shaderInfo">
+        🎬 WebGL Shader Pipeline<br>
+        Chromatic Aberration | Kaleidoscope | VHS<br>
+        <span id="fpsCounter">FPS: --</span>
+    </div>
+
+    <!-- Hidden YouTube player -->
+    <div id="youtube-player"></div>
+
+    <!-- WebGL Canvas for shader output -->
+    <canvas id="glCanvas"></canvas>
+
+    <div id="activeOverlay" class="overlay" style="display: none;">
+        <div class="fenthouse-text">🌿 FENTHOUSE 🌿</div>
+        <div class="chaos-number">42069</div>
+    </div>
+
+    <div id="movieInfo" class="movie-info" style="display: none;">
+        <div class="movie-title" id="movieTitle">Loading...</div>
+        <div>Public Domain Cinema | Additive Blend Mode</div>
+    </div>
+
+    <div id="inactiveOverlay" class="inactive-message" style="display: none;">
+        <div class="big">🔒</div>
+        <div>FENTHOUSE MODE INACTIVE</div>
+        <div style="font-size: 16px; margin-top: 10px;">Chaos must reach 42069 to unlock</div>
+    </div>
+
+    <div class="status-bar" id="countdown" style="display: none;">LOCKED IN</div>
+
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+    <script>
+        // Public Domain Movie IDs
+        const PUBLIC_DOMAIN_MOVIES = [
+            { id: 'H91BVugTf8k', title: 'Night of the Living Dead (1968)' },
+            { id: 'Gr1jO6T2eR4', title: 'Plan 9 from Outer Space (1957)' },
+            { id: 'lL7j09C7deg', title: 'The Last Man on Earth (1964)' },
+            { id: 'YnOZFq6vF9g', title: 'House on Haunted Hill (1959)' },
+            { id: 'sU1mL2j8J1s', title: 'Carnival of Souls (1962)' }
+        ];
+
+        let player;
+        let currentMovie = null;
+        let fenthouseActive = false;
+        let time = 0;
+        let videoTexture = null;
+        let videoElement = null;
+
+        // WebGL Context and Resources
+        const glCanvas = document.getElementById('glCanvas');
+        const gl = glCanvas.getContext('webgl2', {
+            alpha: true,
+            premultipliedAlpha: false,
+            antialias: false
+        }) || glCanvas.getContext('webgl', {
+            alpha: true,
+            premultipliedAlpha: false,
+            antialias: false
+        });
+
+        if (!gl) {
+            alert('WebGL not supported - falling back to 2D mode');
+        }
+
+        // Shader Programs
+        let sceneProgram, compositeProgram;
+        let sceneBuffer, compositeBuffer;
+        let sceneTexture, noiseTexture;
+        let framebuffer;
+
+        // Vertex Shader - Basic Quad
+        const vertexShaderSource = `
+            attribute vec2 a_position;
+            attribute vec2 a_texCoord;
+            varying vec2 v_texCoord;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+                v_texCoord = a_texCoord;
+            }
+        `;
+
+        // Fragment Shader - Psychedelic Effects Pipeline
+        const fragmentShaderSource = `
+            precision highp float;
+            varying vec2 v_texCoord;
+            uniform sampler2D u_video;
+            uniform sampler2D u_noise;
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            uniform vec2 u_mouse;
+            uniform float u_intensity;
+
+            // Random function
+            float rand(vec2 co) {
+                return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+            }
+
+            // Noise function
+            float noise(vec2 p) {
+                return rand(p);
+            }
+
+            // Chromatic Aberration
+            vec3 chromaticAberration(sampler2D tex, vec2 uv, float amount) {
+                vec2 direction = normalize(uv - 0.5);
+                float r = texture2D(tex, uv + direction * amount * 0.02).r;
+                float g = texture2D(tex, uv).g;
+                float b = texture2D(tex, uv - direction * amount * 0.02).b;
+                return vec3(r, g, b);
+            }
+
+            // Kaleidoscope effect
+            vec2 kaleidoscope(vec2 uv, float segments, float offset) {
+                vec2 centered = uv - 0.5;
+                float r = length(centered);
+                float angle = atan(centered.y, centered.x);
+                
+                // Segment the angle
+                float segmentAngle = 3.14159 * 2.0 / segments;
+                angle = mod(angle, segmentAngle);
+                angle = abs(angle - segmentAngle * 0.5);
+                
+                // Rotate over time
+                angle += u_time * 0.3 + offset;
+                
+                // Convert back to UV
+                vec2 newUV = vec2(
+                    cos(angle) * r,
+                    sin(angle) * r
+                ) + 0.5;
+                
+                return newUV;
+            }
+
+            // VHS Scanlines
+            float scanlines(vec2 uv, float time) {
+                float sl = sin(uv.y * 400.0 + time * 10.0) * 0.04;
+                sl += sin(uv.y * 200.0 - time * 5.0) * 0.02;
+                return 1.0 - sl;
+            }
+
+            // VHS Distortion
+            vec2 vhsDistort(vec2 uv, float time) {
+                float distortion = sin(uv.y * 8.0 + time * 2.0) * 0.005;
+                distortion += sin(uv.y * 20.0 + time * 5.0) * 0.002;
+                distortion *= (rand(vec2(time, uv.y)) * 2.0 - 1.0) * 0.5 + 0.5;
+                return uv + vec2(distortion, 0.0);
+            }
+
+            // Psychedelic color shift
+            vec3 psychedelicShift(vec3 color, float time) {
+                float angle = time * 2.0;
+                vec3 shift = vec3(
+                    sin(angle) * 0.3,
+                    sin(angle + 2.09) * 0.3,
+                    sin(angle + 4.18) * 0.3
+                );
+                return color + shift;
+            }
+
+            // Glitch offset
+            vec2 glitchOffset(vec2 uv, float time) {
+                float threshold = 0.97;
+                float glitchAmount = 0.03;
+                
+                float glitch = step(threshold, rand(vec2(time * 10.0, 0.0)));
+                float offset = (rand(vec2(time, 0.0)) * 2.0 - 1.0) * glitchAmount;
+                
+                return uv + vec2(offset * glitch, 0.0);
+            }
+
+            void main() {
+                vec2 uv = v_texCoord;
+                
+                // Apply VHS distortion
+                uv = vhsDistort(uv, u_time);
+                
+                // Apply glitch offset
+                uv = glitchOffset(uv, u_time);
+                
+                // Kaleidoscope transformation
+                float kaleidoSegments = 8.0 + sin(u_time * 0.5) * 4.0;
+                vec2 kaleidoUV = kaleidoscope(uv, kaleidoSegments, sin(u_time * 0.2) * 0.5);
+                
+                // Blend between normal and kaleidoscope
+                float kaleidoMix = 0.3 + sin(u_time) * 0.2;
+                vec2 finalUV = mix(uv, kaleidoUV, kaleidoMix);
+                
+                // Apply chromatic aberration
+                float aberrationAmount = 1.0 + sin(u_time * 3.0) * 0.5;
+                vec3 color = chromaticAberration(u_video, finalUV, aberrationAmount);
+                
+                // Psychedelic color shift
+                color = psychedelicShift(color, u_time);
+                
+                // Scanlines
+                float sl = scanlines(v_texCoord, u_time);
+                color *= sl;
+                
+                // Add some noise/grain
+                float grain = noise(v_texCoord * u_time) * 0.1;
+                color += grain;
+                
+                // Vignette
+                vec2 vignetteUV = v_texCoord * (1.0 - v_texCoord);
+                float vignette = vignetteUV.x * vignetteUV.y * 15.0;
+                vignette = pow(vignette, 0.15);
+                color *= vignette;
+                
+                // Color saturation boost
+                float saturation = 1.5;
+                vec3 gray = vec3(dot(color, vec3(0.299, 0.587, 0.114)));
+                color = mix(gray, color, saturation);
+                
+                // Intensity boost
+                color *= 1.0 + u_intensity * 0.5;
+                
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        // WebGL2 version of fragment shader (for better performance)
+        const fragmentShaderSourceGLSL3 = `
+            #version 300 es
+            precision highp float;
+            in vec2 v_texCoord;
+            uniform sampler2D u_video;
+            uniform sampler2D u_noise;
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            uniform vec2 u_mouse;
+            uniform float u_intensity;
+            out vec4 fragColor;
+
+            float rand(vec2 co) {
+                return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+            }
+
+            float noise(vec2 p) {
+                return rand(p);
+            }
+
+            vec3 chromaticAberration(sampler2D tex, vec2 uv, float amount) {
+                vec2 direction = normalize(uv - 0.5);
+                float r = texture(tex, uv + direction * amount * 0.02).r;
+                float g = texture(tex, uv).g;
+                float b = texture(tex, uv - direction * amount * 0.02).b;
+                return vec3(r, g, b);
+            }
+
+            vec2 kaleidoscope(vec2 uv, float segments, float offset) {
+                vec2 centered = uv - 0.5;
+                float r = length(centered);
+                float angle = atan(centered.y, centered.x);
+                float segmentAngle = 3.14159 * 2.0 / segments;
+                angle = mod(angle, segmentAngle);
+                angle = abs(angle - segmentAngle * 0.5);
+                angle += u_time * 0.3 + offset;
+                vec2 newUV = vec2(cos(angle) * r, sin(angle) * r) + 0.5;
+                return newUV;
+            }
+
+            float scanlines(vec2 uv, float time) {
+                float sl = sin(uv.y * 400.0 + time * 10.0) * 0.04;
+                sl += sin(uv.y * 200.0 - time * 5.0) * 0.02;
+                return 1.0 - sl;
+            }
+
+            vec2 vhsDistort(vec2 uv, float time) {
+                float distortion = sin(uv.y * 8.0 + time * 2.0) * 0.005;
+                distortion += sin(uv.y * 20.0 + time * 5.0) * 0.002;
+                distortion *= (rand(vec2(time, uv.y)) * 2.0 - 1.0) * 0.5 + 0.5;
+                return uv + vec2(distortion, 0.0);
+            }
+
+            vec3 psychedelicShift(vec3 color, float time) {
+                float angle = time * 2.0;
+                vec3 shift = vec3(
+                    sin(angle) * 0.3,
+                    sin(angle + 2.09) * 0.3,
+                    sin(angle + 4.18) * 0.3
+                );
+                return color + shift;
+            }
+
+            vec2 glitchOffset(vec2 uv, float time) {
+                float threshold = 0.97;
+                float glitchAmount = 0.03;
+                float glitch = step(threshold, rand(vec2(time * 10.0, 0.0)));
+                float offset = (rand(vec2(time, 0.0)) * 2.0 - 1.0) * glitchAmount;
+                return uv + vec2(offset * glitch, 0.0);
+            }
+
+            void main() {
+                vec2 uv = v_texCoord;
+                uv = vhsDistort(uv, u_time);
+                uv = glitchOffset(uv, u_time);
+                float kaleidoSegments = 8.0 + sin(u_time * 0.5) * 4.0;
+                vec2 kaleidoUV = kaleidoscope(uv, kaleidoSegments, sin(u_time * 0.2) * 0.5);
+                float kaleidoMix = 0.3 + sin(u_time) * 0.2;
+                vec2 finalUV = mix(uv, kaleidoUV, kaleidoMix);
+                float aberrationAmount = 1.0 + sin(u_time * 3.0) * 0.5;
+                vec3 color = chromaticAberration(u_video, finalUV, aberrationAmount);
+                color = psychedelicShift(color, u_time);
+                float sl = scanlines(v_texCoord, u_time);
+                color *= sl;
+                float grain = noise(v_texCoord * u_time) * 0.1;
+                color += grain;
+                vec2 vignetteUV = v_texCoord * (1.0 - v_texCoord);
+                float vignette = vignetteUV.x * vignetteUV.y * 15.0;
+                vignette = pow(vignette, 0.15);
+                color *= vignette;
+                float saturation = 1.5;
+                vec3 gray = vec3(dot(color, vec3(0.299, 0.587, 0.114)));
+                color = mix(gray, color, saturation);
+                color *= 1.0 + u_intensity * 0.5;
+                fragColor = vec4(color, 1.0);
+            }
+        `;
+
+        const vertexShaderSourceGLSL3 = `
+            #version 300 es
+            in vec2 a_position;
+            in vec2 a_texCoord;
+            out vec2 v_texCoord;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+                v_texCoord = a_texCoord;
+            }
+        `;
+
+        // Compile Shader
+        function compileShader(gl, source, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        // Create Program
+        function createProgram(gl, vsSource, fsSource) {
+            const vs = compileShader(gl, vsSource, gl.VERTEX_SHADER);
+            const fs = compileShader(gl, fsSource, gl.FRAGMENT_SHADER);
+            if (!vs || !fs) return null;
+
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                return null;
+            }
+            return program;
+        }
+
+        // Initialize WebGL
+        function initWebGL() {
+            resizeCanvas();
+            
+            const isWebGL2 = gl instanceof WebGL2RenderingContext;
+            
+            // Create shader program
+            sceneProgram = createProgram(
+                gl,
+                isWebGL2 ? vertexShaderSourceGLSL3 : vertexShaderSource,
+                isWebGL2 ? fragmentShaderSourceGLSL3 : fragmentShaderSource
+            );
+
+            if (!sceneProgram) {
+                console.error('Failed to create shader program');
+                return false;
+            }
+
+            // Create buffer for fullscreen quad
+            const positions = new Float32Array([
+                -1, -1, 0, 0,
+                1, -1, 1, 0,
+                -1, 1, 0, 1,
+                1, 1, 1, 1
+            ]);
+
+            sceneBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, sceneBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            // Create video texture
+            videoTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+            // Create noise texture
+            const noiseSize = 256;
+            const noiseData = new Uint8Array(noiseSize * noiseSize * 4);
+            for (let i = 0; i < noiseSize * noiseSize * 4; i += 4) {
+                const v = Math.random() * 255;
+                noiseData[i] = v;
+                noiseData[i + 1] = v;
+                noiseData[i + 2] = v;
+                noiseData[i + 3] = 255;
+            }
+            noiseTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, noiseTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, noiseSize, noiseSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, noiseData);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+            return true;
+        }
+
+        function resizeCanvas() {
+            glCanvas.width = window.innerWidth;
+            glCanvas.height = window.innerHeight;
+            if (gl) gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // Initialize WebGL
+        let webglReady = initWebGL();
+
+        // YouTube API
+        function onYouTubeIframeAPIReady() {
+            console.log('YouTube API Ready');
+        }
+
+        function loadRandomMovie() {
+            const movie = PUBLIC_DOMAIN_MOVIES[Math.floor(Math.random() * PUBLIC_DOMAIN_MOVIES.length)];
+            currentMovie = movie;
+            
+            document.getElementById('movieTitle').textContent = movie.title;
+            document.getElementById('movieInfo').style.display = 'block';
+
+            if (player) {
+                player.loadVideoById(movie.id);
+            } else {
+                player = new YT.Player('youtube-player', {
+                    videoId: movie.id,
+                    playerVars: {
+                        autoplay: 1,
+                        mute: 1,
+                        controls: 0,
+                        loop: 1,
+                        playlist: movie.id,
+                        modestbranding: 1,
+                        rel: 0,
+                        showinfo: 0
+                    },
+                    events: {
+                        onReady: onPlayerReady,
+                        onStateChange: onPlayerStateChange
+                    }
+                });
+            }
+        }
+
+        function onPlayerReady(event) {
+            event.target.playVideo();
+            event.target.mute();
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.ENDED) {
+                player.playVideo();
+            }
+        }
+
+        // Get video element from iframe
+        function getVideoElement() {
+            try {
+                const iframe = document.querySelector('#youtube-player iframe');
+                if (iframe && iframe.contentDocument) {
+                    return iframe.contentDocument.querySelector('video');
+                }
+            } catch (e) {
+                // Cross-origin access denied
+            }
+            return null;
+        }
+
+        // Render WebGL frame
+        function renderWebGL() {
+            if (!webglReady || !player || !sceneProgram) return;
+
+            gl.useProgram(sceneProgram);
+
+            // Set up attributes
+            const positionLoc = gl.getAttribLocation(sceneProgram, 'a_position');
+            const texCoordLoc = gl.getAttribLocation(sceneProgram, 'a_texCoord');
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, sceneBuffer);
+            gl.enableVertexAttribArray(positionLoc);
+            gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 16, 0);
+            gl.enableVertexAttribArray(texCoordLoc);
+            gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 16, 8);
+
+            // Update video texture
+            try {
+                // Try to get the video element
+                const iframe = document.querySelector('iframe');
+                if (iframe) {
+                    // Use the iframe as a texture source via canvas capture
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = 640;
+                    tempCanvas.height = 360;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    
+                    // Draw a psychedelic placeholder if we can't access video directly
+                    const gradient = tempCtx.createRadialGradient(320, 180, 0, 320, 180, 300);
+                    gradient.addColorStop(0, `hsl(${time * 50 % 360}, 100%, 50%)`);
+                    gradient.addColorStop(0.5, `hsl(${(time * 50 + 180) % 360}, 100%, 30%)`);
+                    gradient.addColorStop(1, '#000');
+                    tempCtx.fillStyle = gradient;
+                    tempCtx.fillRect(0, 0, 640, 360);
+                    
+                    // Add some video-like noise
+                    tempCtx.fillStyle = `rgba(255, 255, 255, 0.1)`;
+                    for (let i = 0; i < 100; i++) {
+                        tempCtx.fillRect(Math.random() * 640, Math.random() * 360, 2, 2);
+                    }
+
+                    gl.activeTexture(gl.TEXTURE0);
+                    gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tempCanvas);
+                }
+            } catch (e) {
+                console.error('Video texture error:', e);
+            }
+
+            // Set uniforms
+            gl.uniform1i(gl.getUniformLocation(sceneProgram, 'u_video'), 0);
+            gl.uniform1i(gl.getUniformLocation(sceneProgram, 'u_noise'), 1);
+            gl.uniform1f(gl.getUniformLocation(sceneProgram, 'u_time'), time);
+            gl.uniform2f(gl.getUniformLocation(sceneProgram, 'u_resolution'), glCanvas.width, glCanvas.height);
+            gl.uniform2f(gl.getUniformLocation(sceneProgram, 'u_mouse'), 0.5, 0.5);
+            gl.uniform1f(gl.getUniformLocation(sceneProgram, 'u_intensity'), 1.0);
+
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, noiseTexture);
+
+            // Clear and draw
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        // 2D Canvas Particles for additive blend
+        const particleCanvas = document.createElement('canvas');
+        particleCanvas.style.position = 'fixed';
+        particleCanvas.style.top = '0';
+        particleCanvas.style.left = '0';
+        particleCanvas.style.width = '100%';
+        particleCanvas.style.height = '100%';
+        particleCanvas.style.zIndex = '2';
+        particleCanvas.style.pointerEvents = 'none';
+        particleCanvas.style.mixBlendMode = 'lighter';
+        document.body.appendChild(particleCanvas);
+        
+        const pCtx = particleCanvas.getContext('2d');
+        let particles = [];
+        let spirals = [];
+
+        function resizeParticleCanvas() {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeParticleCanvas);
+        resizeParticleCanvas();
+
+        // HYPER-PARTICLE - fast, crazy, chaotic
+        class PsyParticle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * particleCanvas.width;
+                this.y = Math.random() * particleCanvas.height;
+                this.size = Math.random() * 20 + 10;
+                this.speedX = (Math.random() - 0.5) * 20;
+                this.speedY = (Math.random() - 0.5) * 20;
+                this.hue = Math.random() * 360;
+                this.life = 1;
+                this.decay = Math.random() * 0.02 + 0.01;
+                this.pulse = Math.random() * Math.PI;
+            }
+            update() {
+                this.x += this.speedX + Math.sin(time * 8 + this.pulse) * 5;
+                this.y += this.speedY + Math.cos(time * 10 + this.pulse) * 5;
+                this.hue += 20;
+                this.life -= this.decay;
+                this.pulse += 0.3;
+                if (Math.random() < 0.02) {
+                    this.x = Math.random() * particleCanvas.width;
+                    this.y = Math.random() * particleCanvas.height;
+                }
+                if (this.x < 0) this.x = particleCanvas.width;
+                if (this.x > particleCanvas.width) this.x = 0;
+                if (this.y < 0) this.y = particleCanvas.height;
+                if (this.y > particleCanvas.height) this.y = 0;
+                if (this.life <= 0) this.reset();
+            }
+            draw() {
+                pCtx.save();
+                pCtx.globalAlpha = this.life * 0.8;
+                const size = this.size + Math.sin(this.pulse) * 8;
+                pCtx.strokeStyle = `hsl(${this.hue}, 100%, 50%)`;
+                pCtx.lineWidth = 4;
+                pCtx.shadowBlur = 50;
+                pCtx.shadowColor = `hsl(${this.hue}, 100%, 50%)`;
+                pCtx.beginPath();
+                for (let i = 0; i < 3; i++) {
+                    const angle = time * 15 + (i * Math.PI * 2 / 3);
+                    const x = this.x + Math.cos(angle) * size;
+                    const y = this.y + Math.sin(angle) * size;
+                    if (i === 0) pCtx.moveTo(x, y);
+                    else pCtx.lineTo(x, y);
+                }
+                pCtx.closePath();
+                pCtx.stroke();
+                pCtx.restore();
+            }
+        }
+
+        class RainbowSpiral {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 0;
+                this.maxRadius = Math.min(particleCanvas.width, particleCanvas.height) * 0.5;
+                this.angle = 0;
+                this.hue = 0;
+                this.spinSpeed = (Math.random() - 0.5) * 0.5;
+            }
+            update() {
+                this.radius += 10;
+                this.angle += this.spinSpeed * 8;
+                this.hue += 30;
+                if (this.radius > this.maxRadius) {
+                    this.radius = 0;
+                    this.x = Math.random() * particleCanvas.width;
+                    this.y = Math.random() * particleCanvas.height;
+                    this.spinSpeed = (Math.random() - 0.5) * 0.5;
+                }
+            }
+            draw() {
+                pCtx.save();
+                pCtx.translate(this.x, this.y);
+                pCtx.rotate(this.angle);
+                for (let i = 0; i < 25; i++) {
+                    const r = this.radius - i * 12;
+                    if (r < 0) continue;
+                    const hue = (this.hue + i * 35) % 360;
+                    pCtx.strokeStyle = `hsla(${hue}, 100%, 60%, ${1 - i/25})`;
+                    pCtx.lineWidth = 5;
+                    pCtx.shadowBlur = 60;
+                    pCtx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+                    pCtx.beginPath();
+                    const arms = 6;
+                    for (let arm = 0; arm < arms; arm++) {
+                        const armAngle = (arm / arms) * Math.PI * 2;
+                        for (let a = 0; a < Math.PI * 6; a += 0.04) {
+                            const sr = r * (1 - a/(Math.PI * 6)) + Math.sin(a * 5 + time * 15) * 40;
+                            const sx = Math.cos(armAngle + a) * sr;
+                            const sy = Math.sin(armAngle + a) * sr;
+                            if (a === 0) pCtx.moveTo(sx, sy);
+                            else pCtx.lineTo(sx, sy);
+                        }
+                    }
+                    pCtx.stroke();
+                }
+                pCtx.restore();
+            }
+        }
+
+        // Initialize particles
+        for (let i = 0; i < 500; i++) {
+            particles.push(new PsyParticle());
+        }
+        for (let i = 0; i < 8; i++) {
+            spirals.push(new RainbowSpiral(
+                Math.random() * particleCanvas.width,
+                Math.random() * particleCanvas.height
+            ));
+        }
+
+        function drawMandala() {
+            const cx = particleCanvas.width / 2;
+            const cy = particleCanvas.height / 2;
+            const maxRadius = Math.min(particleCanvas.width, particleCanvas.height) * 0.4;
+            pCtx.save();
+            pCtx.translate(cx, cy);
+            pCtx.rotate(time * 3);
+            pCtx.translate(-cx, -cy);
+            for (let r = 20; r < maxRadius; r += 12) {
+                const hue = (time * 150 + r * 3) % 360;
+                const flash = Math.sin(time * 30 + r) * 0.5 + 0.5;
+                pCtx.strokeStyle = `hsla(${hue}, 100%, ${50 + flash * 50}%, ${0.3 + flash * 0.4})`;
+                pCtx.lineWidth = 4;
+                pCtx.shadowBlur = 40 + flash * 30;
+                pCtx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+                pCtx.beginPath();
+                const segments = 12;
+                for (let i = 0; i <= segments; i++) {
+                    const angle = (i / segments) * Math.PI * 2 + time * 8;
+                    const wave = Math.sin(angle * 6 + time * 20) * 25 + Math.cos(time * 15) * 15;
+                    const x = cx + Math.cos(angle) * (r + wave);
+                    const y = cy + Math.sin(angle) * (r + wave);
+                    if (i === 0) pCtx.moveTo(x, y);
+                    else pCtx.lineTo(x, y);
+                }
+                pCtx.closePath();
+                pCtx.stroke();
+            }
+            pCtx.restore();
+        }
+
+        let fpsTime = 0;
+        let fpsFrames = 0;
+        let lastTime = performance.now();
+
+        function animate() {
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+            time += delta * 1.5;
+
+            fpsFrames++;
+            fpsTime += delta;
+            if (fpsTime >= 1) {
+                document.getElementById('fpsCounter').textContent = `FPS: ${fpsFrames}`;
+                fpsFrames = 0;
+                fpsTime = 0;
+            }
+
+            if (fenthouseActive) {
+                // Render WebGL shader background
+                renderWebGL();
+
+                // Render 2D particle overlay with additive blend
+                pCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+
+                // Draw spirals
+                spirals.forEach(s => {
+                    s.update();
+                    s.draw();
+                });
+                
+                // Draw mandala
+                drawMandala();
+                
+                // Draw particles
+                particles.forEach(p => {
+                    p.update();
+                    p.draw();
+                });
+                
+                // Screen flash effect
+                if (Math.random() < 0.08) {
+                    pCtx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.2)`;
+                    pCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+                }
+            } else {
+                // Dark mode when inactive
+                if (gl) {
+                    gl.clearColor(0, 0, 0, 1);
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+                }
+                pCtx.fillStyle = '#000';
+                pCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+                
+                // PULSE GRID
+                pCtx.strokeStyle = `rgba(34, 34, 34, ${0.3 + Math.sin(time) * 0.2})`;
+                pCtx.lineWidth = 1;
+                for (let x = 0; x < particleCanvas.width; x += 50) {
+                    pCtx.beginPath();
+                    pCtx.moveTo(x, 0);
+                    pCtx.lineTo(x, particleCanvas.height);
+                    pCtx.stroke();
+                }
+                for (let y = 0; y < particleCanvas.height; y += 50) {
+                    pCtx.beginPath();
+                    pCtx.moveTo(0, y);
+                    pCtx.lineTo(particleCanvas.width, y);
+                    pCtx.stroke();
+                }
+            }
+            
+            requestAnimationFrame(animate);
+        }
+
+        async function checkFenthouse() {
+            try {
+                const response = await fetch('/api/metrics?t=' + Date.now());
+                const data = await response.json();
+                
+                const wasActive = fenthouseActive;
+                fenthouseActive = data.fenthouse_active === true;
+                
+                // If just activated, load a movie
+                if (fenthouseActive && !wasActive) {
+                    loadRandomMovie();
+                    document.getElementById('activeOverlay').style.display = 'block';
+                    document.getElementById('inactiveOverlay').style.display = 'none';
+                    document.getElementById('countdown').style.display = 'block';
+                } else if (!fenthouseActive && wasActive) {
+                    if (player) {
+                        player.stopVideo();
+                    }
+                    document.getElementById('activeOverlay').style.display = 'none';
+                    document.getElementById('inactiveOverlay').style.display = 'block';
+                    document.getElementById('countdown').style.display = 'none';
+                    document.getElementById('movieInfo').style.display = 'none';
+                }
+
+                if (data.fenthouse_countdown) {
+                    const cd = data.fenthouse_countdown;
+                    document.getElementById('countdown').textContent =
+                        `🔒 ${cd.hours}h ${cd.minutes}m ${cd.seconds}s`;
+                }
+            } catch (e) {
+                console.error('Fetch error:', e);
+            }
+        }
+
+        // Start
+        checkFenthouse();
+        animate();
+        setInterval(checkFenthouse, 3000);
+
+        // Randomly switch movies every 5 minutes during Fenthouse
+        setInterval(() => {
+            if (fenthouseActive && player) {
+                loadRandomMovie();
+            }
+        }, 300000);
+    </script>
+</body>
+</html>

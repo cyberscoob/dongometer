@@ -152,15 +152,36 @@
 </head>
 <body>
     <a href="/" class="nav-link">⬅ Dashboard</a>
-    
-    <!-- Hidden YouTube player for video source -->
-    <div id="youtube-player" style="position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0;"></div>
-    
-    <!-- WebGL canvas for video post-processing -->
-    <canvas id="video-canvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></canvas>
-    
+
+    <!-- PSYCHEDELIC VIDEO BACKGROUND -->
+    <div id="video-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; overflow: hidden;">
+        <div id="youtube-player" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 120vw; height: 120vh; filter: contrast(1.5) saturate(2) hue-rotate(0deg) blur(2px); animation: video-fx 5s infinite;"></div>
+    </div>
+
     <!-- Chaos overlay canvas -->
     <canvas id="canvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; mix-blend-mode: screen;"></canvas>
+
+    <style>
+        @keyframes video-fx {
+            0% { filter: contrast(1.5) saturate(2) hue-rotate(0deg) blur(2px); transform: translate(-50%, -50%) scale(1); }
+            25% { filter: contrast(2) saturate(3) hue-rotate(90deg) blur(1px); transform: translate(-50%, -50%) scale(1.1); }
+            50% { filter: contrast(1.8) saturate(2.5) hue-rotate(180deg) blur(3px); transform: translate(-50%, -50%) scale(1.05); }
+            75% { filter: contrast(2.2) saturate(3.5) hue-rotate(270deg) blur(1px); transform: translate(-50%, -50%) scale(1.15); }
+            100% { filter: contrast(1.5) saturate(2) hue-rotate(360deg) blur(2px); transform: translate(-50%, -50%) scale(1); }
+        }
+        #video-container::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 4px);
+            pointer-events: none;
+            animation: scanlines 0.1s infinite;
+        }
+        @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(4px); }
+        }
+    </style>
 
     <div id="activeOverlay" class="overlay" style="display: none;">
         <div class="fenthouse-text">🌿 FENTHOUSE 🌿</div>
@@ -430,6 +451,7 @@
             try {
                 const response = await fetch('/api/metrics?t=' + Date.now());
                 const data = await response.json();
+                const wasActive = fenthouseActive;
                 fenthouseActive = data.fenthouse_active === true;
                 countdown = data.fenthouse_countdown;
 
@@ -437,8 +459,14 @@
                 document.getElementById('inactiveOverlay').style.display = fenthouseActive ? 'none' : 'block';
 
                 if (countdown) {
-                    document.getElementById('countdown').textContent =
+                    document.getElementById('countdown').textContent = 
                         `🔒 ${countdown.hours}h ${countdown.minutes}m ${countdown.seconds}s`;
+                }
+                
+                // LOAD MOVIE WHEN FENTHOUSE ACTIVATES
+                if (fenthouseActive && !wasActive && !ytPlayer) {
+                    console.log('Fenthouse activated! Loading random B-movie...');
+                    loadRandomMovie();
                 }
             } catch (e) {
                 console.error('Fetch error:', e);
@@ -524,7 +552,7 @@
             requestAnimationFrame(animate);
         }
 
-        // ========== YOUTUBE + WEBGL VIDEO PIPELINE ==========
+        // ========== YOUTUBE VIDEO BACKGROUND ==========
         const MOVIES = [
             'lZ2p-1d-L40', // Night of the Living Dead
             'EdKDIK2EiCc', // Plan 9 from Outer Space
@@ -532,161 +560,19 @@
             'uJSCJPnZ1mI', // Carnival of Souls
             'nN2y8mMXn00', // The Last Man on Earth
         ];
-        
+
         let ytPlayer = null;
         let currentMovie = null;
-        let videoTexture = null;
-        let gl = null;
-        let shaderProgram = null;
-        let videoCanvas = document.getElementById('video-canvas');
-        let videoCtx = videoCanvas.getContext('webgl') || videoCanvas.getContext('experimental-webgl');
-        
-        // WebGL Shaders for video post-processing
-        const vertexShaderSource = `
-            attribute vec2 a_position;
-            attribute vec2 a_texCoord;
-            varying vec2 v_texCoord;
-            void main() {
-                gl_Position = vec4(a_position, 0.0, 1.0);
-                v_texCoord = a_texCoord;
-            }
-        `;
-        
-        const fragmentShaderSource = `
-            precision mediump float;
-            varying vec2 v_texCoord;
-            uniform sampler2D u_texture;
-            uniform float u_time;
-            uniform vec2 u_resolution;
-            
-            void main() {
-                vec2 uv = v_texCoord;
-                vec2 center = vec2(0.5, 0.5);
-                
-                // CHROMATIC ABERRATION - RGB split
-                float aberration = 0.02 + sin(u_time * 5.0) * 0.01;
-                vec2 direction = normalize(uv - center);
-                
-                float r = texture2D(u_texture, uv + direction * aberration).r;
-                float g = texture2D(u_texture, uv).g;
-                float b = texture2D(u_texture, uv - direction * aberration).b;
-                
-                // KALEIDOSCOPE effect
-                float angle = atan(uv.y - 0.5, uv.x - 0.5);
-                float radius = length(uv - center);
-                float segments = 8.0;
-                angle = mod(angle + u_time * 2.0, 6.28318 / segments);
-                angle = abs(angle - 3.14159 / segments);
-                
-                // PSYCHEDELIC COLOR SHIFTING
-                vec3 color = vec3(r, g, b);
-                float hueShift = u_time * 0.5;
-                
-                // VHS/SCANLINE DISTORTION
-                float scanline = sin(uv.y * 200.0 + u_time * 10.0) * 0.1;
-                color += scanline;
-                
-                float noise = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
-                color += noise * 0.05;
-                
-                // WARP/DISTORT
-                float warp = sin(uv.y * 10.0 + u_time * 3.0) * 0.01;
-                uv.x += warp;
-                
-                // Apply chromatic result with kaleidoscope tint
-                vec3 finalColor = color * (0.8 + 0.2 * sin(hueShift + radius * 10.0));
-                
-                // Brightness/contrast boost
-                finalColor = pow(finalColor, vec3(0.7));
-                finalColor *= 1.3;
-                
-                gl_FragColor = vec4(finalColor, 1.0);
-            }
-        `;
-        
-        function initWebGL() {
-            gl = videoCtx;
-            if (!gl) {
-                console.error('WebGL not supported');
-                return false;
-            }
-            
-            // Compile shaders
-            const vertexShader = compileShader(gl.VERTEX_SHADER, vertexShaderSource);
-            const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
-            
-            if (!vertexShader || !fragmentShader) return false;
-            
-            // Create program
-            shaderProgram = gl.createProgram();
-            gl.attachShader(shaderProgram, vertexShader);
-            gl.attachShader(shaderProgram, fragmentShader);
-            gl.linkProgram(shaderProgram);
-            
-            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-                console.error('Shader program failed to link');
-                return false;
-            }
-            
-            // Setup geometry
-            const positions = new Float32Array([
-                -1, -1,  1, -1,  -1, 1,
-                -1,  1,  1, -1,   1, 1
-            ]);
-            
-            const texCoords = new Float32Array([
-                0, 1,  1, 1,  0, 0,
-                0, 0,  1, 1,  1, 0
-            ]);
-            
-            const positionBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-            
-            const a_position = gl.getAttribLocation(shaderProgram, 'a_position');
-            gl.enableVertexAttribArray(a_position);
-            gl.vertexAttribPointer(a_position, 2, gl.FLOAT, false, 0, 0);
-            
-            const texCoordBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
-            
-            const a_texCoord = gl.getAttribLocation(shaderProgram, 'a_texCoord');
-            gl.enableVertexAttribArray(a_texCoord);
-            gl.vertexAttribPointer(a_texCoord, 2, gl.FLOAT, false, 0, 0);
-            
-            // Create texture
-            videoTexture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, videoTexture);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-            
-            return true;
-        }
-        
-        function compileShader(type, source) {
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
-                gl.deleteShader(shader);
-                return null;
-            }
-            return shader;
-        }
-        
+
         function onYouTubeIframeAPIReady() {
             console.log('YouTube API ready');
         }
-        
+
         function loadRandomMovie() {
             const movieId = MOVIES[Math.floor(Math.random() * MOVIES.length)];
             currentMovie = movieId;
-            
+            console.log('Loading movie:', movieId);
+
             ytPlayer = new YT.Player('youtube-player', {
                 videoId: movieId,
                 playerVars: {
@@ -697,77 +583,35 @@
                     rel: 0,
                     modestbranding: 1,
                     playsinline: 1,
-                    mute: 1
+                    mute: 1,
+                    loop: 1,
+                    playlist: movieId
                 },
                 events: {
                     onReady: (event) => {
                         event.target.playVideo();
                         console.log('Playing movie:', movieId);
                     },
+                    onStateChange: (event) => {
+                        if (event.data === YT.PlayerState.ENDED) {
+                            event.target.playVideo();
+                        }
+                    },
                     onError: (e) => console.error('YouTube error:', e)
                 }
             });
         }
-        
-        function updateVideoTexture() {
-            if (!ytPlayer || !gl || !videoTexture) return;
-            
-            try {
-                const video = ytPlayer.getIframe().contentDocument.querySelector('video');
-                if (video && video.readyState >= 2) {
-                    videoCanvas.width = window.innerWidth;
-                    videoCanvas.height = window.innerHeight;
-                    gl.viewport(0, 0, videoCanvas.width, videoCanvas.height);
-                    
-                    gl.bindTexture(gl.TEXTURE_2D, videoTexture);
-                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-                }
-            } catch(e) {
-                // Cross-origin restrictions may block this
-            }
-        }
-        
-        function renderShaders() {
-            if (!gl || !shaderProgram) return;
-            
-            gl.useProgram(shaderProgram);
-            
-            const u_texture = gl.getUniformLocation(shaderProgram, 'u_texture');
-            const u_time = gl.getUniformLocation(shaderProgram, 'u_time');
-            const u_resolution = gl.getUniformLocation(shaderProgram, 'u_resolution');
-            
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, videoTexture);
-            gl.uniform1i(u_texture, 0);
-            gl.uniform1f(u_time, time);
-            gl.uniform2f(u_resolution, videoCanvas.width, videoCanvas.height);
-            
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-        }
-        
+
         // Load YouTube API
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         const firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-        
+
         // Initialize
         checkFenthouse();
         animate();
         setInterval(checkFenthouse, 5000);
-        
-        // WebGL init after page load
-        window.addEventListener('load', () => {
-            if (initWebGL()) {
-                console.log('WebGL initialized');
-                setInterval(() => {
-                    if (fenthouseActive) {
-                        updateVideoTexture();
-                        renderShaders();
-                    }
-                }, 33); // 30fps
-            }
-        });
     </script>
 </body>
 </html>

@@ -543,6 +543,10 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_metrics()
         elif path == '/api/indexer-stats':
             self.serve_indexer_stats()
+        elif path == '/coverage':
+            self.serve_coverage()
+        elif path == '/api/indexer-coverage':
+            self.serve_indexer_coverage()
         else:
             self.send_error(404)
 
@@ -817,6 +821,120 @@ class DongometerHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({'error': str(e)})
     
+    def serve_coverage(self):
+        """Serve the coverage visualization HTML page"""
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'templates/indexer_coverage.html'), 'r') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(content.encode())
+        except FileNotFoundError:
+            self.send_error(404)
+
+    def serve_indexer_coverage(self):
+        """Serve timeline coverage data for top 10 rooms in 30-day buckets"""
+        try:
+            import subprocess
+            import json
+
+            # Get top 10 rooms by event count with first/last event timestamps
+            query = '''
+            var pipeline = [
+                {$group: {
+                    _id: "$room_id",
+                    event_count: {$sum: 1},
+                    first_event: {$min: "$origin_server_ts"},
+                    last_event: {$max: "$origin_server_ts"}
+                }},
+                {$sort: {event_count: -1}},
+                {$limit: 10}
+            ];
+            var results = db.events.aggregate(pipeline);
+            var rooms = [];
+            results.forEach(function(doc) {
+                function tsToMillis(ts) {
+                    var high = ts.high || 0;
+                    var low = ts.low || ts;
+                    return (high * 4294967296) + (low >>> 0);
+                }
+                rooms.push({
+                    room_id: doc._id,
+                    event_count: doc.event_count,
+                    first_event: tsToMillis(doc.first_event),
+                    last_event: tsToMillis(doc.last_event)
+                });
+            });
+            print(JSON.stringify(rooms));
+            '''
+            result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
+                capture_output=True, text=True, timeout=30
+            )
+
+            rooms = json.loads(result.stdout.strip().split('\n')[-1]) if result.returncode == 0 else []
+
+            if not rooms:
+                self.send_json({'global_start': None, 'rooms': []})
+                return
+
+            # Find global_start (earliest event across all rooms)
+            global_start = min(r['first_event'] for r in rooms)
+
+            # For each room, create 30-day buckets and sample for coverage
+            BUCKET_MS = 30 * 24 * 60 * 60 * 1000  # 30 days in milliseconds
+
+            for room in rooms:
+                first_ts = room['first_event']
+                last_ts = room['last_event']
+
+                # Generate segments with 30-day buckets
+                segments = []
+                current = first_ts - (first_ts % BUCKET_MS)  # Round down to bucket boundary
+                end_bound = last_ts + BUCKET_MS  # Extend slightly past last event
+
+                while current < end_bound:
+                    bucket_end = current + BUCKET_MS
+
+                    # Query for events in this bucket
+                    bucket_query = f'''
+                    var count = db.events.countDocuments({{
+                        "room_id": "{room['room_id']}",
+                        "origin_server_ts": {{$gte: {{$numberLong: "{int(current)}"}}, $lt: {{$numberLong: "{int(bucket_end)}"}}}}
+                    }});
+                    print(JSON.stringify({{start: {int(current)}, end: {int(bucket_end)}, count: count, has_data: count > 0}}));
+                    '''
+                    bucket_result = subprocess.run(
+                        ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', bucket_query],
+                        capture_output=True, text=True, timeout=10
+                    )
+
+                    if bucket_result.returncode == 0:
+                        lines = bucket_result.stdout.strip().split('\n')
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith('{'):
+                                seg_data = json.loads(line)
+                                segments.append(seg_data)
+                                break
+
+                    current = bucket_end
+
+                room['segments'] = segments
+                # Convert timestamps back to ISO format for cleaner display
+                room['first_event'] = first_ts
+                room['last_event'] = last_ts
+
+            data = {
+                'global_start': global_start,
+                'rooms': rooms
+            }
+            self.send_json(data)
+
+        except Exception as e:
+            self.send_json({'error': str(e)})
+
     def send_json(self, data):
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')

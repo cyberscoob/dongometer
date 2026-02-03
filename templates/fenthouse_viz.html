@@ -18,7 +18,7 @@
             background: #000;
         }
         
-        /* Layer 1: Psychedelic canvas on top */
+        /* Layer 1: Psychedelic canvas on top (additive) */
         #psychedelic-layer {
             position: fixed;
             top: 0; left: 0;
@@ -28,7 +28,18 @@
             pointer-events: none;
         }
         
-        /* Layer 2: UI overlay */
+        /* Layer 2: RGB Smoke (multiply blend) */
+        #smoke-layer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 11;
+            mix-blend-mode: multiply;
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        
+        /* Layer 3: UI overlay */
         #ui-layer {
             position: fixed;
             top: 0; left: 0;
@@ -104,7 +115,10 @@
     <!-- LAYER 1: Psychedelic canvas with additive blend -->
     <canvas id="psychedelic-layer"></canvas>
     
-    <!-- LAYER 2: UI -->
+    <!-- LAYER 2: RGB Smoke with multiply blend -->
+    <canvas id="smoke-layer"></canvas>
+    
+    <!-- LAYER 3: UI -->
     <div id="ui-layer">
         <button id="quality-btn" onclick="toggleQuality()">QUALITY: HIGH</button>
         
@@ -385,18 +399,103 @@
         
         let rgbShift, kaleidoscope, liquidPlasma;
         
+        // RGB SMOKE SIMULATION - multiplied onto the stack
+        class RGBSmoke {
+            constructor() {
+                this.smokeCanvas = document.getElementById('smoke-layer');
+                this.sCtx = this.smokeCanvas.getContext('2d');
+                this.particles = [];
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                // Create smoke particles
+                for (let i = 0; i < 30; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.sw,
+                        y: Math.random() * this.sh,
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: -Math.random() * 3 - 1, // Float upward
+                        size: Math.random() * 100 + 50,
+                        hue: Math.random() * 360,
+                        life: Math.random() * 0.5 + 0.5,
+                        channel: Math.floor(Math.random() * 3) // 0=R, 1=G, 2=B
+                    });
+                }
+            }
+            
+            resize() {
+                const scale = quality === 'low' ? 0.5 : (quality === 'medium' ? 0.75 : 1);
+                this.sw = this.smokeCanvas.width = window.innerWidth * scale;
+                this.sh = this.smokeCanvas.height = window.innerHeight * scale;
+                this.smokeCanvas.style.width = '100vw';
+                this.smokeCanvas.style.height = '100vh';
+            }
+            
+            updateAndDraw() {
+                // Fade out (multiply layer uses white as neutral)
+                this.sCtx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+                this.sCtx.fillRect(0, 0, this.sw, this.sh);
+                
+                this.particles.forEach(p => {
+                    // Update position with turbulence
+                    p.x += p.vx + Math.sin(time * 2 + p.y * 0.01) * 2;
+                    p.y += p.vy + Math.cos(time * 1.5 + p.x * 0.01) * 1;
+                    p.hue += 0.5;
+                    p.life -= 0.002;
+                    
+                    // Reset if dead or off screen
+                    if (p.life <= 0 || p.y < -200) {
+                        p.x = Math.random() * this.sw;
+                        p.y = this.sh + 100;
+                        p.vx = (Math.random() - 0.5) * 2;
+                        p.vy = -Math.random() * 3 - 1;
+                        p.life = Math.random() * 0.5 + 0.5;
+                        p.channel = Math.floor(Math.random() * 3);
+                    }
+                    
+                    // Draw RGB smoke puff
+                    const channelColors = [
+                        `rgba(255, 0, 0, ${0.1 * p.life})`,     // Red channel
+                        `rgba(0, 255, 0, ${0.1 * p.life})`,     // Green channel  
+                        `rgba(0, 0, 255, ${0.1 * p.life})`      // Blue channel
+                    ];
+                    
+                    const grad = this.sCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                    grad.addColorStop(0, channelColors[p.channel]);
+                    grad.addColorStop(0.5, `hsla(${p.hue}, 100%, 50%, ${0.08 * p.life})`);
+                    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    
+                    this.sCtx.fillStyle = grad;
+                    this.sCtx.beginPath();
+                    this.sCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.sCtx.fill();
+                });
+            }
+        }
+        
+        let rgbSmoke;
+        
         function initParticles() {
             particles = [];
             spirals = [];
             rgbShift = new RGBShiftEffect();
             kaleidoscope = new KaleidoscopeEffect();
             liquidPlasma = new LiquidPlasmaEffect();
+            rgbSmoke = new RGBSmoke();
             const pc = quality === 'low' ? 10 : (quality === 'medium' ? 20 : 35);
             const sc = quality === 'low' ? 1 : (quality === 'medium' ? 2 : 3);
             for (let i = 0; i < pc; i++) particles.push(new Particle());
             for (let i = 0; i < sc; i++) spirals.push(new Spiral());
         }
+        
         initParticles();
+        
+        // Also init smoke when quality changes
+        const originalToggleQuality = toggleQuality;
+        toggleQuality = function() {
+            originalToggleQuality();
+            if (rgbSmoke) rgbSmoke.resize();
+        };
         
         function animate(now) {
             requestAnimationFrame(animate);
@@ -426,6 +525,9 @@
                 ctx.fillStyle = `hsla(${Math.random() * 360}, 100%, 50%, 0.12)`;
                 ctx.fillRect(0, 0, width, height);
             }
+            
+            // RGB SMOKE LAYER (multiply blend)
+            if (rgbSmoke) rgbSmoke.updateAndDraw();
         }
         animate(0);
         

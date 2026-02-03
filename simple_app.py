@@ -758,23 +758,24 @@ class DongometerHandler(BaseHTTPRequestHandler):
             
             # Get hourly timeline (last 24 hours)
             day_ago = int((datetime.now() - timedelta(hours=24)).timestamp() * 1000)
-            query = '''
-            var hours = {};
-            var dayAgo = ''' + str(day_ago) + ''';
-            db.events.find({"origin_server_ts": {$gt: dayAgo}}, {"origin_server_ts": 1}).forEach(function(doc) {
-                var ts = doc.origin_server_ts;
-                var high = ts.high || 0;
-                var low = ts.low || ts;
-                var timestamp = (high * 4294967296) + (low >>> 0);
-                var hour = new Date(timestamp).getHours();
-                hours[hour] = (hours[hour] || 0) + 1;
-            });
-            var result = [];
-            for (var i = 0; i < 24; i++) {
-                result.push({hour: i + ":00", count: hours[i] || 0});
-            }
-            print(JSON.stringify(result));
+            js_code = '''
+                var hours = {};
+                var dayAgo = ''' + str(day_ago) + ''';
+                db.events.find({"origin_server_ts": {$gt: dayAgo}}, {"origin_server_ts": 1}).forEach(function(doc) {
+                    var ts = doc.origin_server_ts;
+                    var high = ts.high || 0;
+                    var low = ts.low || ts;
+                    var timestamp = (high * 4294967296) + (low >>> 0);
+                    var hour = new Date(timestamp).getHours();
+                    hours[hour] = (hours[hour] || 0) + 1;
+                });
+                var result = [];
+                for (var i = 0; i < 24; i++) {
+                    result.push({hour: String(i) + ":00", count: hours[i] || 0});
+                }
+                print(JSON.stringify(result));
             '''
+            query = js_code
             result = subprocess.run(
                 ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
                 capture_output=True, text=True, timeout=30

@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 FENTHOUSE MODE WEBGL 🌿</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+        
+        /* Main WebGL canvas - covers everything */
+        #webgl-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+        
+        /* Video element (hidden, used as texture) */
+        #video-source {
+            position: fixed;
+            top: 0; left: 0;
+            width: 1px; height: 1px;
+            opacity: 0;
+            z-index: 0;
+        }
+        
+        /* UI overlay */
+        #ui-layer {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 20;
+            pointer-events: none;
+        }
+        
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1a0f0a, #0f1a0f, #0a0f1a);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; cursor: pointer; pointer-events: auto;
+        }
+        .fenthouse-text {
+            font-size: 80px; font-weight: bold; text-transform: uppercase;
+            animation: rainbow 0.5s linear infinite, shake 0.1s ease-in-out infinite;
+            text-shadow: -5px 0 #ff0000, 5px 0 #00ffff, 0 0 30px currentColor;
+            letter-spacing: 15px;
+        }
+        .overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .chaos-number {
+            font-size: 140px; font-weight: bold; margin-top: 20px;
+            animation: rainbow 0.7s linear infinite, pulse 0.3s ease-in-out infinite;
+            text-shadow: -8px 0 #ff0000, 8px 0 #00ffff, 0 0 50px currentColor;
+        }
+        @keyframes rainbow {
+            0% { color: #ff0000; } 16% { color: #ff8800; } 33% { color: #ffff00; }
+            50% { color: #00ff00; } 66% { color: #0088ff; } 83% { color: #8800ff; } 100% { color: #ff0000; }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-4px, 2px); }
+            50% { transform: translate(4px, -2px); } 75% { transform: translate(-2px, 4px); }
+        }
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        
+        #movie-info {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); border: 1px solid #0f0; 
+            padding: 10px 30px; border-radius: 30px;
+            color: #0f0; font-size: 16px;
+        }
+        
+        /* DVD BOUNCER TIMER */
+        #dvd-timer {
+            position: fixed;
+            padding: 15px 25px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #0f0;
+            border-radius: 10px;
+            color: #0f0;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 25;
+            white-space: nowrap;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        #quality-btn {
+            position: fixed; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.8); border: 1px solid #0f0; color: #0f0;
+            padding: 10px; cursor: pointer; z-index: 30; pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Video source (hidden) -->
+    <video id="video-source" autoplay muted loop playsinline crossorigin="anonymous"></video>
+    
+    <!-- Main WebGL Canvas -->
+    <canvas id="webgl-canvas"></canvas>
+    
+    <!-- UI Layer -->
+    <div id="ui-layer">
+        <button id="quality-btn" onclick="toggleQuality()">QUALITY: HIGH</button>
+        
+        <div id="start-screen">
+            <div class="fenthouse-text">🌿 ENTER FENTHOUSE 🌿</div>
+            <div id="countdown" style="color:#0f0;font-size:24px;margin-top:20px;"></div>
+        </div>
+        
+        <div class="overlay" id="active-overlay" style="display:none;">
+            <div class="fenthouse-text">🌿 FENTHOUSE 🌿</div>
+            <div class="chaos-number">42069</div>
+        </div>
+        
+        <div id="movie-info" style="display:none;"></div>
+        
+        <!-- DVD BOUNCER TIMER -->
+        <div id="dvd-timer" style="display:none;">🔒 00:00:00</div>
+    </div>
+
+    <!-- Shader sources -->
+    <script id="vs-quad" type="x-shader/x-vertex">
+        attribute vec2 a_position;
+        attribute vec2 a_texCoord;
+        varying vec2 v_texCoord;
+        void main() {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+            v_texCoord = a_texCoord;
+        }
+    </script>
+
+    <script id="fs-advect" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform sampler2D u_velocity;
+        uniform sampler2D u_source;
+        uniform vec2 u_resolution;
+        uniform float u_dt;
+        uniform float u_dissipation;
+        
+        void main() {
+            vec2 coord = v_texCoord - u_dt * texture2D(u_velocity, v_texCoord).xy / u_resolution;
+            gl_FragColor = u_dissipation * texture2D(u_source, coord);
+        }
+    </script>
+
+    <script id="fs-jacobi" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform sampler2D u_pressure;
+        uniform sampler2D u_divergence;
+        uniform vec2 u_resolution;
+        uniform float u_alpha;
+        uniform float u_beta;
+        
+        void main() {
+            vec2 texel = 1.0 / u_resolution;
+            vec4 pL = texture2D(u_pressure, v_texCoord - vec2(texel.x, 0.0));
+            vec4 pR = texture2D(u_pressure, v_texCoord + vec2(texel.x, 0.0));
+            vec4 pB = texture2D(u_pressure, v_texCoord - vec2(0.0, texel.y));
+            vec4 pT = texture2D(u_pressure, v_texCoord + vec2(0.0, texel.y));
+            vec4 bC = texture2D(u_divergence, v_texCoord);
+            gl_FragColor = (pL + pR + pB + pT + u_alpha * bC) / u_beta;
+        }
+    </script>
+
+    <script id="fs-divergence" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform sampler2D u_velocity;
+        uniform vec2 u_resolution;
+        
+        void main() {
+            vec2 texel = 1.0 / u_resolution;
+            vec4 wL = texture2D(u_velocity, v_texCoord - vec2(texel.x, 0.0));
+            vec4 wR = texture2D(u_velocity, v_texCoord + vec2(texel.x, 0.0));
+            vec4 wB = texture2D(u_velocity, v_texCoord - vec2(0.0, texel.y));
+            vec4 wT = texture2D(u_velocity, v_texCoord + vec2(0.0, texel.y));
+            gl_FragColor = vec4(0.5 * ((wR.x - wL.x) + (wT.y - wB.y)), 0.0, 0.0, 1.0);
+        }
+    </script>
+
+    <script id="fs-gradient" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform sampler2D u_pressure;
+        uniform sampler2D u_velocity;
+        uniform vec2 u_resolution;
+        
+        void main() {
+            vec2 texel = 1.0 / u_resolution;
+            float pL = texture2D(u_pressure, v_texCoord - vec2(texel.x, 0.0)).x;
+            float pR = texture2D(u_pressure, v_texCoord + vec2(texel.x, 0.0)).x;
+            float pB = texture2D(u_pressure, v_texCoord - vec2(0.0, texel.y)).x;
+            float pT = texture2D(u_pressure, v_texCoord + vec2(0.0, texel.y)).x;
+            vec2 velocity = texture2D(u_velocity, v_texCoord).xy - 0.5 * vec2(pR - pL, pT - pB);
+            gl_FragColor = vec4(velocity, 0.0, 1.0);
+        }
+    </script>
+
+    <script id="fs-splat" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform sampler2D u_target;
+        uniform vec2 u_point;
+        uniform float u_radius;
+        uniform vec4 u_color;
+        
+        void main() {
+            vec2 coord = v_texCoord - u_point;
+            float dist = length(coord * vec2(1.0, 1.0));
+            float influence = smoothstep(u_radius, 0.0, dist);
+            vec4 base = texture2D(u_target, v_texCoord);
+            gl_FragColor = base + u_color * influence;
+        }
+    </script>
+
+    <script id="fs-render-fluid" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform sampler2D u_density;
+        uniform sampler2D u_velocity;
+        uniform sampler2D u_video;
+        uniform float u_time;
+        uniform vec2 u_resolution;
+        
+        // RGB Shift effect
+        vec3 rgbShift(sampler2D tex, vec2 uv, float amount) {
+            float r = texture2D(tex, uv + vec2(amount, 0.0)).r;
+            float g = texture2D(tex, uv).g;
+            float b = texture2D(tex, uv - vec2(amount, 0.0)).b;
+            return vec3(r, g, b);
+        }
+        
+        // Kaleidoscope effect
+        vec2 kaleidoscope(vec2 uv, float segments, float rotation) {
+            vec2 centered = uv - 0.5;
+            float angle = atan(centered.y, centered.x);
+            float radius = length(centered);
+            float segAngle = 6.28318 / segments;
+            angle = mod(angle + rotation, segAngle);
+            if (angle > segAngle * 0.5) angle = segAngle - angle;
+            vec2 kuv = vec2(cos(angle), sin(angle)) * radius + 0.5;
+            return kuv;
+        }
+        
+        // Liquid plasma distortion
+        vec2 plasmaDistort(vec2 uv, float time) {
+            float distortion = sin(uv.x * 10.0 + time) * 0.02;
+            distortion += cos(uv.y * 8.0 - time * 0.5) * 0.02;
+            distortion += sin((uv.x + uv.y) * 5.0 + time * 0.3) * 0.015;
+            return uv + vec2(distortion);
+        }
+        
+        void main() {
+            vec2 uv = v_texCoord;
+            
+            // Sample velocity for distortion
+            vec2 velocity = texture2D(u_velocity, uv).xy;
+            
+            // Apply plasma distortion
+            vec2 distortedUV = plasmaDistort(uv, u_time);
+            
+            // Apply kaleidoscope
+            vec2 kaleidoUV = kaleidoscope(distortedUV, 8.0, u_time * 0.5);
+            
+            // Sample video with RGB shift
+            float shiftAmount = 0.01 + length(velocity) * 0.05;
+            vec3 videoColor = rgbShift(u_video, kaleidoUV, shiftAmount);
+            
+            // Mix with fluid density (advected colors)
+            vec4 density = texture2D(u_density, uv + velocity * 0.1);
+            
+            // Combine layers
+            vec3 finalColor = videoColor * 0.7 + density.rgb * 0.5;
+            
+            // Add velocity visualization (subtle)
+            finalColor += length(velocity) * 0.1;
+            
+            // Color shifting based on time
+            float hueShift = sin(u_time * 0.5) * 0.1;
+            finalColor.r = mix(finalColor.r, finalColor.g, hueShift);
+            finalColor.b = mix(finalColor.b, finalColor.r, hueShift);
+            
+            gl_FragColor = vec4(finalColor, 1.0);
+        }
+    </script>
+
+    <script id="fs-render-particles" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform sampler2D u_particleTex;
+        uniform vec2 u_resolution;
+        
+        void main() {
+            vec4 color = texture2D(u_particleTex, v_texCoord);
+            // Apply multiply blend effect
+            gl_FragColor = vec4(color.rgb, color.a * 0.7);
+        }
+    </script>
+
+    <script id="fs-clear" type="x-shader/x-fragment">
+        precision highp float;
+        varying vec2 v_texCoord;
+        uniform float u_clearR, u_clearG, u_clearB, u_clearA;
+        void main() {
+            gl_FragColor = vec4(u_clearR, u_clearG, u_clearB, u_clearA);
+        }
+    </script>
+
+    <script>
+    // ==================== WEBGL FLUID SIMULATION ====================
+    // Based on GPU Gems Chapter 38: Fast Fluid Dynamics Simulation on the GPU
+    
+    class WebGLFluidSimulation {
+        constructor(canvas) {
+            this.canvas = canvas;
+            this.gl = canvas.getContext('webgl', { 
+                alpha: false, 
+                preserveDrawingBuffer: false,
+                antialias: false,
+                powerPreference: 'high-performance'
+            }) || canvas.getContext('experimental-webgl');
+            
+            if (!this.gl) {
+                alert('WebGL not supported!');
+                return;
+            }
+            
+            const gl = this.gl;
+            this.ext = gl.getExtension('OES_texture_float');
+            if (!this.ext) {
+                console.warn('Float textures not supported, falling back to half float');
+            }
+            
+            // Simulation parameters
+            this.simWidth = 128;
+            this.simHeight = 72; // 16:9 ratio, low-res for performance
+            this.dt = 0.016;
+            this.densityDissipation = 0.995;
+            this.velocityDissipation = 0.98;
+            
+            // Viewport size
+            this.width = window.innerWidth;
+            this.height = window.innerHeight;
+            canvas.width = this.width;
+            canvas.height = this.height;
+            
+            // Initialize shaders and framebuffers
+            this.initShaders();
+            this.initFramebuffers();
+            this.initParticles();
+            this.initFullscreenQuad();
+            
+            // Video texture
+            this.videoTexture = null;
+            
+            // Time
+            this.time = 0;
+            
+            // Bind resize handler
+            window.addEventListener('resize', () => this.resize());
+        }
+        
+        resize() {
+            this.width = window.innerWidth;
+            this.height = window.innerHeight;
+            this.canvas.width = this.width;
+            this.canvas.height = this.height;
+            this.gl.viewport(0, 0, this.width, this.height);
+        }
+        
+        createShader(type, source) {
+            const gl = this.gl;
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+        
+        createProgram(vsSource, fsSource) {
+            const gl = this.gl;
+            const vs = this.createShader(gl.VERTEX_SHADER, vsSource);
+            const fs = this.createShader(gl.FRAGMENT_SHADER, fsSource);
+            const program = gl.createProgram();
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Program link error:', gl.getProgramInfoLog(program));
+                return null;
+            }
+            return program;
+        }
+        
+        getShaderSource(id) {
+            return document.getElementById(id).textContent;
+        }
+        
+        initShaders() {
+            const vsQuad = this.getShaderSource('vs-quad');
+            
+            this.programs = {
+                advect: this.createProgram(vsQuad, this.getShaderSource('fs-advect')),
+                jacobi: this.createProgram(vsQuad, this.getShaderSource('fs-jacobi')),
+                divergence: this.createProgram(vsQuad, this.getShaderSource('fs-divergence')),
+                gradient: this.createProgram(vsQuad, this.getShaderSource('fs-gradient')),
+                splat: this.createProgram(vsQuad, this.getShaderSource('fs-splat')),
+                renderFluid: this.createProgram(vsQuad, this.getShaderSource('fs-render-fluid')),
+                renderParticles: this.createProgram(vsQuad, this.getShaderSource('fs-render-particles')),
+                clear: this.createProgram(vsQuad, this.getShaderSource('fs-clear'))
+            };
+            
+            // Get uniform locations
+            this.uniforms = {};
+            for (const [name, program] of Object.entries(this.programs)) {
+                this.uniforms[name] = {};
+                const numUniforms = this.gl.getProgramParameter(program, this.gl.ACTIVE_UNIFORMS);
+                for (let i = 0; i < numUniforms; i++) {
+                    const info = this.gl.getActiveUniform(program, i);
+                    this.uniforms[name][info.name] = this.gl.getUniformLocation(program, info.name);
+                }
+            }
+        }
+        
+        createFBO(width, height, type = this.gl.RGBA) {
+            const gl = this.gl;
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, type, width, height, 0, type, gl.UNSIGNED_BYTE, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            
+            const fbo = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+            
+            return { fbo, texture, width, height };
+        }
+        
+        createDoubleFBO(width, height, type) {
+            return {
+                read: this.createFBO(width, height, type),
+                write: this.createFBO(width, height, type),
+                swap: function() {
+                    const temp = this.read;
+                    this.read = this.write;
+                    this.write = temp;
+                }
+            };
+        }
+        
+        initFramebuffers() {
+            const gl = this.gl;
+            const type = gl.RGBA;
+            
+            // Ping-pong framebuffers for velocity field
+            this.velocityFBO = this.createDoubleFBO(this.simWidth, this.simHeight, type);
+            
+            // Ping-pong framebuffers for density (color being advected)
+            this.densityFBO = this.createDoubleFBO(this.simWidth, this.simHeight, type);
+            
+            // Pressure field (single, cleared each frame start)
+            this.pressureFBO = this.createDoubleFBO(this.simWidth, this.simHeight, type);
+            
+            // Divergence (temp)
+            this.divergenceFBO = this.createFBO(this.simWidth, this.simHeight, type);
+            
+            // Particle FBOs for RGB smoke
+            this.smokeFBO = this.createDoubleFBO(this.width / 2, this.height / 2, type);
+            
+            // Fluid goo FBO
+            this.gooFBO = this.createDoubleFBO(this.width / 2, this.height / 2, type);
+        }
+        
+        initFullscreenQuad() {
+            const gl = this.gl;
+            const vertices = new Float32Array([
+                -1, -1, 0, 0,
+                 1, -1, 1, 0,
+                -1,  1, 0, 1,
+                 1,  1, 1, 1
+            ]);
+            
+            this.quadVBO = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVBO);
+            gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        }
+        
+        bindQuad(program) {
+            const gl = this.gl;
+            const posLoc = gl.getAttribLocation(program, 'a_position');
+            const texLoc = gl.getAttribLocation(program, 'a_texCoord');
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVBO);
+            if (posLoc >= 0) {
+                gl.enableVertexAttribArray(posLoc);
+                gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+            }
+            if (texLoc >= 0) {
+                gl.enableVertexAttribArray(texLoc);
+                gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+            }
+        }
+        
+        // ============== NAVIER-STOKES STEPS ==============
+        
+        // Step 1: Advect velocity field
+        advectVelocity() {
+            const gl = this.gl;
+            const prog = this.programs.advect;
+            gl.useProgram(prog);
+            
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.velocityFBO.write.fbo);
+            gl.viewport(0, 0, this.simWidth, this.simHeight);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this.velocityFBO.read.texture);
+            gl.uniform1i(this.uniforms.advect.u_velocity, 0);
+            
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, this.velocityFBO.read.texture);
+            gl.uniform1i(this.uniforms.advect.u_source, 1);
+            
+            gl.uniform2f(this.uniforms.advect.u_resolution, this.simWidth, this.simHeight);
+            gl.uniform1f(this.uniforms.advect.u_dt, this.dt);
+            gl.uniform1f(this.uniforms.advect.u_dissipation, this.velocityDissipation);
+            
+            this.bindQuad(prog);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            this.velocityFBO.swap();
+        }
+        
+        // Step 2: Add forces (from video motion)
+        addForces(videoTexture) {
+            // Sample video and create velocity field from motion/color differences
+            // For now, add random splats at bottom to simulate goo intake
+            const gl = this.gl;
+            
+            // Add some ambient motion
+            this.splat(this.velocityFBO, 0.5, 0.9, 0.001, 0.0, 0.03, 0.0, 0.0);
+            this.splat(this.velocityFBO, 0.3, 0.8, 0.002, 0.0, -0.02, 0.0, 0.0);
+            this.splat(this.velocityFBO, 0.7, 0.85, 0.0015, 0.0, 0.025, 0.0, 0.0);
+        }
+        
+        // Step 3: Compute divergence of velocity field
+        computeDivergence() {
+            const gl = this.gl;
+            const prog = this.programs.divergence;
+            gl.useProgram(prog);
+            
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.divergenceFBO.fbo);
+            gl.viewport(0, 0, this.simWidth, this.simHeight);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this.velocityFBO.read.texture);
+            gl.uniform1i(this.uniforms.divergence.u_velocity, 0);
+            gl.uniform2f(this.uniforms.divergence.u_resolution, this.simWidth, this.simHeight);
+            
+            this.bindQuad(prog);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+        
+        // Step 4: Solve Poisson equation using Jacobi iteration
+        solvePressure(iterations = 20) {
+            const gl = this.gl;
+            const prog = this.programs.jacobi;
+            gl.useProgram(prog);
+            
+            gl.uniform2f(this.uniforms.jacobi.u_resolution, this.simWidth, this.simHeight);
+            gl.uniform1f(this.uniforms.jacobi.u_alpha, -1.0);
+            gl.uniform1f(this.uniforms.jacobi.u_beta, 4.0);
+            
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, this.divergenceFBO.texture);
+            gl.uniform1i(this.uniforms.jacobi.u_divergence, 1);
+            
+            for (let i = 0; i < iterations; i++) {
+                gl.bindFramebuffer(gl.FRAMEBUFFER, this.pressureFBO.write.fbo);
+                gl.viewport(0, 0, this.simWidth, this.simHeight);
+                
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.pressureFBO.read.texture);
+                gl.uniform1i(this.uniforms.jacobi.u_pressure, 0);
+                
+                this.bindQuad(prog);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                
+                this.pressureFBO.swap();
+            }
+        }
+        
+        // Step 5: Subtract pressure gradient from velocity
+        subtractGradient() {
+            const gl = this.gl;
+            const prog = this.programs.gradient;
+            gl.useProgram(prog);
+            
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.velocityFBO.write.fbo);
+            gl.viewport(0, 0, this.simWidth, this.simHeight);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this.pressureFBO.read.texture);
+            gl.uniform1i(this.uniforms.gradient.u_pressure, 0);
+            
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, this.velocityFBO.read.texture);
+            gl.uniform1i(this.uniforms.gradient.u_velocity, 1);
+            
+            gl.uniform2f(this.uniforms.gradient.u_resolution, this.simWidth, this.simHeight);
+            
+            this.bindQuad(prog);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            this.velocityFBO.swap();
+        }
+        
+        // Step 6: Advect density (colors) through velocity field
+        advectDensity() {
+            const gl = this.gl;
+            const prog = this.programs.advect;
+            gl.useProgram(prog);
+            
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.densityFBO.write.fbo);
+            gl.viewport(0, 0, this.simWidth, this.simHeight);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this.velocityFBO.read.texture);
+            gl.uniform1i(this.uniforms.advect.u_velocity, 0);
+            
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, this.densityFBO.read.texture);
+            gl.uniform1i(this.uniforms.advect.u_source, 1);
+            
+            gl.uniform2f(this.uniforms.advect.u_resolution, this.simWidth, this.simHeight);
+            gl.uniform1f(this.uniforms.advect.u_dt, this.dt);
+            gl.uniform1f(this.uniforms.advect.u_dissipation, this.densityDissipation);
+            
+            this.bindQuad(prog);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            this.densityFBO.swap();
+        }
+        
+        // Helper: splat function for adding velocity/density
+        splat(fbo, x, y, radius, r, g, b, a) {
+            const gl = this.gl;
+            const prog = this.programs.splat;
+            gl.useProgram(prog);
+            
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.write.fbo);
+            gl.viewport(0, 0, fbo.read.width, fbo.read.height);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, fbo.read.texture);
+            gl.uniform1i(this.uniforms.splat.u_target, 0);
+            
+            gl.uniform2f(this.uniforms.splat.u_point, x, 1.0 - y);
+            gl.uniform1f(this.uniforms.splat.u_radius, radius);
+            gl.uniform4f(this.uniforms.splat.u_color, r, g, b, a);
+            
+            this.bindQuad(prog);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            fbo.swap();
+        }
+        
+        // ============== PARTICLE SYSTEMS ==============
+        
+        initParticles() {
+            // RGB Smoke particles
+            this.smokeParticles = [];
+            for (let i = 0; i < 50; i++) {
+                this.smokeParticles.push(this.createSmokeParticle());
+            }
+            
+            // Fluid Goo particles
+            this.gooParticles = [];
+        }
+        
+        createSmokeParticle() {
+            return {
+                x: Math.random(),
+                y: 1.0 + Math.random() * 0.2,
+                vx: (Math.random() - 0.5) * 0.002,
+                vy: -Math.random() * 0.003 - 0.001,
+                size: Math.random() * 0.05 + 0.02,
+                hue: Math.random() * 360,
+                life: Math.random() * 0.5 + 0.5,
+                channel: Math.floor(Math.random() * 3)
+            };
+        }
+        
+        createGooParticle() {
+            return {
+                x: Math.random(),
+                y: 0.0,
+                vx: (Math.random() - 0.5) * 0.005,
+                vy: Math.random() * 0.01 + 0.005,
+                size: Math.random() * 0.008 + 0.003,
+                r: 0, g: 0, b: 0,
+                state: 'falling',
+                drainProgress: 0
+            };
+        }
+        
+        updateAndRenderParticles() {
+            const gl = this.gl;
+            
+            // Clear smoke FBO
+            this.clearFBO(this.smokeFBO.write, 1, 1, 1, 0.02);
+            
+            // Update and render smoke particles
+            this.smokeParticles.forEach(p => {
+                p.x += p.vx + Math.sin(this.time * 2 + p.y * 10) * 0.001;
+                p.y += p.vy + Math.cos(this.time * 1.5 + p.x * 10) * 0.0005;
+                p.hue += 0.5;
+                p.life -= 0.002;
+                
+                if (p.life <= 0 || p.y < -0.1) {
+                    Object.assign(p, this.createSmokeParticle());
+                }
+                
+                // Render to smoke FBO
+                const colors = [
+                    [1.0, 0.0, 0.0, 0.1 * p.life],
+                    [0.0, 1.0, 0.0, 0.1 * p.life],
+                    [0.0, 0.0, 1.0, 0.1 * p.life]
+                ];
+                const c = colors[p.channel];
+                this.splat(this.smokeFBO, p.x, p.y, p.size * p.life, c[0], c[1], c[2], c[3]);
+            });
+            
+            this.smokeFBO.swap();
+            
+            // Clear goo FBO
+            this.clearFBO(this.gooFBO.write, 0, 0, 0, 0.05);
+            
+            // Spawn new goo particles
+            if (Math.random() < 0.3) {
+                this.gooParticles.push(this.createGooParticle());
+            }
+            
+            const drainX = 0.5;
+            const bottomY = 0.9;
+            const drainRange = 0.03;
+            
+            // Update and render goo particles
+            for (let i = this.gooParticles.length - 1; i >= 0; i--) {
+                const p = this.gooParticles[i];
+                
+                if (p.state === 'falling') {
+                    p.vy += 0.0003;
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vx *= 0.99;
+                    p.vy *= 0.995;
+                    
+                    if (p.y > bottomY) {
+                        p.y = bottomY;
+                        p.vy = 0;
+                        p.state = 'sliding';
+                        
+                        // Set color when hitting bottom
+                        const mix = Math.random();
+                        if (mix < 0.33) {
+                            p.r = 0; p.g = 0.8; p.b = 1.0;
+                        } else if (mix < 0.66) {
+                            p.r = 1.0; p.g = 0; p.b = 0.6;
+                        } else {
+                            p.r = 0.6; p.g = 1.0; p.b = 0;
+                        }
+                    }
+                } else if (p.state === 'sliding') {
+                    const dx = drainX - p.x;
+                    const dist = Math.abs(dx);
+                    
+                    if (dist < drainRange) {
+                        p.state = 'drain';
+                    } else {
+                        const speed = Math.min(0.008, dist * 0.02);
+                        p.vx = (dx > 0 ? speed : -speed);
+                        p.x += p.vx;
+                        p.y += Math.sin(this.time * 5 + p.x * 20) * 0.0005;
+                    }
+                } else if (p.state === 'drain') {
+                    p.drainProgress += 0.02;
+                    const angle = p.drainProgress * 3;
+                    const radius = Math.max(0, 0.02 * (1 - p.drainProgress));
+                    p.x = drainX + Math.cos(angle) * radius;
+                    p.y = bottomY + Math.sin(angle) * radius;
+                    p.size *= 0.98;
+                    
+                    if (p.drainProgress >= 1 || p.size <= 0.0005) {
+                        this.gooParticles.splice(i, 1);
+                        continue;
+                    }
+                }
+                
+                if (p.size > 0.001) {
+                    this.splat(this.gooFBO, p.x, p.y, p.size, p.r, p.g, p.b, 1.0);
+                }
+            }
+            
+            this.gooFBO.swap();
+        }
+        
+        clearFBO(fbo, r, g, b, a) {
+            const gl = this.gl;
+            const prog = this.programs.clear;
+            gl.useProgram(prog);
+            
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.write.fbo);
+            gl.viewport(0, 0, fbo.read.width, fbo.read.height);
+            
+            gl.uniform1f(this.uniforms.clear.u_clearR, r);
+            gl.uniform1f(this.uniforms.clear.u_clearG, g);
+            gl.uniform1f(this.uniforms.clear.u_clearB, b);
+            gl.uniform1f(this.uniforms.clear.u_clearA, a);
+            
+            this.bindQuad(prog);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+        
+        // ============== RENDERING ==============
+        
+        render(videoElement) {
+            const gl = this.gl;
+            this.time += 0.016;
+            
+            // Update video texture if available
+            if (videoElement && videoElement.readyState >= 2) {
+                if (!this.videoTexture) {
+                    this.videoTexture = gl.createTexture();
+                    gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                }
+                gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoElement);
+            }
+            
+            // ===== NAVIER-STOKES FLUID SIMULATION =====
+            // Step 1: Advect velocity
+            this.advectVelocity();
+            
+            // Step 2: Add forces from video
+            this.addForces(this.videoTexture);
+            
+            // Step 3: Projection (make velocity divergence-free)
+            this.computeDivergence();
+            this.solvePressure(20);
+            this.subtractGradient();
+            
+            // Step 4: Advect density through velocity field
+            // Add video colors to density input
+            if (this.videoTexture) {
+                // Sample from video and add to density
+                const colors = [
+                    [0.8, 0.2, 0.2, 0.05], [0.2, 0.8, 0.2, 0.05], [0.2, 0.2, 0.8, 0.05]
+                ];
+                for (let i = 0; i < 3; i++) {
+                    const c = colors[i];
+                    const x = 0.2 + i * 0.3 + Math.sin(this.time + i) * 0.1;
+                    const y = 0.3 + Math.cos(this.time * 0.7 + i * 2) * 0.2;
+                    this.splat(this.densityFBO, x, y, 0.08, c[0], c[1], c[2], c[3]);
+                }
+            }
+            this.advectDensity();
+            
+            // Update particle systems
+            this.updateAndRenderParticles();
+            
+            // ===== FINAL RENDER =====
+            gl.bindFramebuffer(gl.FLAMEBUFFER, null);
+            gl.viewport(0, 0, this.width, this.height);
+            
+            // Render fluid composition
+            const prog = this.programs.renderFluid;
+            gl.useProgram(prog);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this.densityFBO.read.texture);
+            gl.uniform1i(this.uniforms.renderFluid.u_density, 0);
+            
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, this.velocityFBO.read.texture);
+            gl.uniform1i(this.uniforms.renderFluid.u_velocity, 1);
+            
+            gl.activeTexture(gl.TEXTURE2);
+            if (this.videoTexture) {
+                gl.bindTexture(gl.TEXTURE_2D, this.videoTexture);
+            }
+            gl.uniform1i(this.uniforms.renderFluid.u_video, 2);
+            
+            gl.uniform1f(this.uniforms.renderFluid.u_time, this.time);
+            gl.uniform2f(this.uniforms.renderFluid.u_resolution, this.width, this.height);
+            
+            this.bindQuad(prog);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            // Composite smoke (multiply blend simulation)
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.DST_COLOR, gl.ZERO); // Multiply blend
+            
+            const smokeProg = this.programs.renderParticles;
+            gl.useProgram(smokeProg);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this.smokeFBO.read.texture);
+            gl.uniform1i(this.uniforms.renderParticles.u_particleTex, 0);
+            gl.uniform2f(this.uniforms.renderParticles.u_resolution, this.width, this.height);
+            
+            this.bindQuad(smokeProg);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            // Composite goo (hard light simulation)
+            gl.blendFunc(gl.ONE, gl.ONE); // Additive for glow effect
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, this.gooFBO.read.texture);
+            gl.uniform1i(this.uniforms.renderParticles.u_particleTex, 0);
+            
+            this.bindQuad(smokeProg);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            gl.disable(gl.BLEND);
+        }
+    }
+    
+    // ==================== APP SETUP ====================
+    
+    let fluidSim;
+    let quality = 'high';
+    let fenthouseActive = false;
+    let MOVIES = [];
+    let currentMovie = null;
+    
+    function init() {
+        const canvas = document.getElementById('webgl-canvas');
+        fluidSim = new WebGLFluidSimulation(canvas);
+    }
+    
+    function toggleQuality() {
+        quality = quality === 'high' ? 'medium' : (quality === 'medium' ? 'low' : 'high');
+        document.getElementById('quality-btn').textContent = `QUALITY: ${quality.toUpperCase()}`;
+        if (fluidSim) {
+            if (quality === 'low') {
+                fluidSim.simWidth = 64;
+                fluidSim.simHeight = 36;
+            } else if (quality === 'medium') {
+                fluidSim.simWidth = 96;
+                fluidSim.simHeight = 54;
+            } else {
+                fluidSim.simWidth = 128;
+                fluidSim.simHeight = 72;
+            }
+            fluidSim.initFramebuffers();
+        }
+    }
+    
+    // Movies
+    async function loadMovies() {
+        try {
+            const res = await fetch('/api/movies');
+            const data = await res.json();
+            MOVIES = data.movies || [];
+        } catch (e) { console.error(e); }
+    }
+    
+    async function playMovie(idx) {
+        if (!MOVIES.length) await loadMovies();
+        if (!MOVIES.length) return;
+        if (idx >= MOVIES.length) idx = 0;
+        
+        currentMovie = MOVIES[idx];
+        const video = document.getElementById('video-source');
+        video.src = currentMovie.url;
+        
+        try {
+            await video.play();
+            document.getElementById('movie-info').style.display = 'block';
+            document.getElementById('movie-info').textContent = `🎬 ${currentMovie.title}`;
+        } catch (e) {
+            setTimeout(() => playMovie((idx + 1) % MOVIES.length), 500);
+        }
+    }
+    
+    // DVD BOUNCER TIMER
+    class DVDBouncer {
+        constructor() {
+            this.el = document.getElementById('dvd-timer');
+            this.x = Math.random() * (window.innerWidth - 200);
+            this.y = Math.random() * (window.innerHeight - 100);
+            this.vx = (Math.random() > 0.5 ? 1 : -1) * 2;
+            this.vy = (Math.random() > 0.5 ? 1 : -1) * 2;
+            this.hue = 0;
+            this.visible = false;
+            this.totalMs = 0;
+            this.lastFrame = performance.now();
+            this.spinStart = 0;
+            this.isSpinning = false;
+            this.lastSpinTrigger = 0;
+        }
+        
+        setTimeFromServer(hours, minutes, seconds) {
+            const newTotalMs = ((hours * 3600) + (minutes * 60) + seconds) * 1000;
+            if (Math.abs(newTotalMs - this.totalMs) > 1000) {
+                this.totalMs = newTotalMs;
+            }
+        }
+        
+        update() {
+            if (!this.visible) return;
+            
+            const now = performance.now();
+            const delta = now - this.lastFrame;
+            this.lastFrame = now;
+            
+            if (this.totalMs > 0) {
+                this.totalMs = Math.max(0, this.totalMs - delta);
+            }
+            
+            const secondsElapsed = (now - this.lastSpinTrigger) / 1000;
+            if (secondsElapsed >= 10 && !this.isSpinning) {
+                this.triggerSpin();
+            }
+            
+            let rotation = 0;
+            if (this.isSpinning) {
+                const spinElapsed = (now - this.spinStart) / 1000;
+                if (spinElapsed < 2) {
+                    rotation = spinElapsed * 1800;
+                } else {
+                    this.isSpinning = false;
+                    this.lastSpinTrigger = now;
+                }
+            }
+            
+            this.x += this.vx;
+            this.y += this.vy;
+            
+            const w = window.innerWidth - this.el.offsetWidth;
+            const h = window.innerHeight - this.el.offsetHeight;
+            
+            if (this.x <= 0 || this.x >= w) {
+                this.vx *= -1;
+                this.x = Math.max(0, Math.min(this.x, w));
+                this.hue = (this.hue + 60) % 360;
+                this.el.style.borderColor = `hsl(${this.hue}, 100%, 50%)`;
+                this.el.style.boxShadow = `0 0 30px hsla(${this.hue}, 100%, 50%, 0.5)`;
+                this.el.style.color = `hsl(${this.hue}, 100%, 70%)`;
+            }
+            if (this.y <= 0 || this.y >= h) {
+                this.vy *= -1;
+                this.y = Math.max(0, Math.min(this.y, h));
+                this.hue = (this.hue + 60) % 360;
+                this.el.style.borderColor = `hsl(${this.hue}, 100%, 50%)`;
+                this.el.style.boxShadow = `0 0 30px hsla(${this.hue}, 100%, 50%, 0.5)`;
+                this.el.style.color = `hsl(${this.hue}, 100%, 70%)`;
+            }
+            
+            const hours = Math.floor(this.totalMs / 3600000);
+            const minutes = Math.floor((this.totalMs % 3600000) / 60000);
+            const seconds = Math.floor((this.totalMs % 60000) / 1000);
+            const ms = Math.floor((this.totalMs % 1000) / 10);
+            
+            this.el.textContent = `🔒 ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}.${String(ms).padStart(2,'0')}`;
+            
+            this.el.style.left = this.x + 'px';
+            this.el.style.top = this.y + 'px';
+            this.el.style.transform = rotation ? `rotate(${rotation}deg)` : 'none';
+        }
+        
+        triggerSpin() {
+            this.isSpinning = true;
+            this.spinStart = performance.now();
+        }
+        
+        show() {
+            this.visible = true;
+            this.el.style.display = 'block';
+            this.lastFrame = performance.now();
+            this.lastSpinTrigger = performance.now();
+        }
+        
+        hide() {
+            this.visible = false;
+            this.el.style.display = 'none';
+        }
+    }
+    
+    const dvdBouncer = new DVDBouncer();
+    
+    function animateBouncer() {
+        dvdBouncer.update();
+        requestAnimationFrame(animateBouncer);
+    }
+    
+    // Main animation loop
+    function animate() {
+        const video = document.getElementById('video-source');
+        if (fluidSim) {
+            fluidSim.render(video);
+        }
+        requestAnimationFrame(animate);
+    }
+    
+    // Check Fenthouse status
+    async function check() {
+        try {
+            const res = await fetch('/api/metrics?t=' + Date.now());
+            const data = await res.json();
+            fenthouseActive = data.fenthouse_active;
+            
+            document.getElementById('active-overlay').style.display = fenthouseActive ? 'block' : 'none';
+            
+            if (data.fenthouse_countdown) {
+                const c = data.fenthouse_countdown;
+                document.getElementById('countdown').textContent = 
+                    `🔒 ${c.hours}h ${c.minutes}m ${c.seconds}s`;
+                dvdBouncer.setTimeFromServer(c.hours, c.minutes, c.seconds);
+                if (!dvdBouncer.visible) dvdBouncer.show();
+            }
+        } catch (e) {}
+    }
+    
+    // Start on click
+    document.getElementById('start-screen').addEventListener('click', async function() {
+        this.style.display = 'none';
+        dvdBouncer.show();
+        await loadMovies();
+        const randomIdx = Math.floor(Math.random() * Math.max(1, MOVIES.length || 64));
+        await playMovie(randomIdx);
+    });
+    
+    // Initialize
+    init();
+    animate();
+    animateBouncer();
+    check();
+    setInterval(check, 5000);
+    </script>
+</body>
+</html>

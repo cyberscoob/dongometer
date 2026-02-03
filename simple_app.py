@@ -537,6 +537,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_dashboard()
         elif path == '/manifold':
             self.serve_manifold()
+        elif path == '/manifold3d':
+            self.serve_manifold_3d()
         elif path == '/indexer':
             self.serve_indexer_dashboard()
         elif path == '/api/metrics':
@@ -572,6 +574,13 @@ class DongometerHandler(BaseHTTPRequestHandler):
 
     def serve_manifold(self):
         html = open('/home/scoob/dongometer/templates/manifold.html').read() if os.path.exists('/home/scoob/dongometer/templates/manifold.html') else '<h1>Dong Manifold</h1>'
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html')
+        self.end_headers()
+        self.wfile.write(html.encode())
+    
+    def serve_manifold_3d(self):
+        html = open('/home/scoob/dongometer/templates/manifold_3d.html').read() if os.path.exists('/home/scoob/dongometer/templates/manifold_3d.html') else '<h1>Dong Manifold 3D</h1>'
         self.send_response(200)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()

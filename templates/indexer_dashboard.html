@@ -138,20 +138,14 @@
 
         const POLL_MS = 5000;
         const LIVE_POINTS = 36;
+        const ROOM_COLORS = ['#00ff88','#00d9ff','#ff77ff','#ffb347','#ff6b6b','#9d84ff','#89ffde','#ffd166','#7bdff2','#caffbf'];
         let previous = null;
 
         const liveChart = new Chart(document.getElementById('liveChart').getContext('2d'), {
             type: 'line',
             data: {
                 labels: [],
-                datasets: [{
-                    label: 'msgs/min',
-                    data: [],
-                    borderColor: '#00ff88',
-                    backgroundColor: 'rgba(0,255,136,0.15)',
-                    fill: true,
-                    tension: 0.3
-                }]
+                datasets: []
             },
             options: {
                 responsive: true,
@@ -192,14 +186,46 @@
             return ms <= 2 * 60 * 1000;
         }
 
-        function pushLivePoint(value) {
+        function ensureRoomDataset(roomId, idx) {
+            let ds = liveChart.data.datasets.find(d => d.roomId === roomId);
+            if (!ds) {
+                const color = ROOM_COLORS[idx % ROOM_COLORS.length];
+                ds = {
+                    roomId,
+                    label: formatRoomName(roomId),
+                    data: Array(liveChart.data.labels.length).fill(0),
+                    borderColor: color,
+                    backgroundColor: color + '22',
+                    fill: false,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 1
+                };
+                liveChart.data.datasets.push(ds);
+            }
+            return ds;
+        }
+
+        function pushRoomRates(roomRates) {
             const label = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             liveChart.data.labels.push(label);
-            liveChart.data.datasets[0].data.push(Math.max(0, Number(value) || 0));
+
+            const trackedRooms = Object.keys(roomRates);
+            trackedRooms.forEach((roomId, idx) => ensureRoomDataset(roomId, idx));
+
+            liveChart.data.datasets.forEach(ds => {
+                ds.data.push(Math.max(0, Number(roomRates[ds.roomId] || 0)));
+            });
+
             while (liveChart.data.labels.length > LIVE_POINTS) {
                 liveChart.data.labels.shift();
-                liveChart.data.datasets[0].data.shift();
+                liveChart.data.datasets.forEach(ds => ds.data.shift());
             }
+
+            liveChart.data.datasets = liveChart.data.datasets
+                .filter(ds => ds.data.slice(-12).some(v => v > 0.01))
+                .slice(0, 8);
+
             liveChart.update();
         }
 
@@ -246,18 +272,26 @@
                 document.getElementById('index-since').textContent = data.first_message_date || 'Unknown';
                 document.getElementById('msg-rate').textContent = Number(data.messages_per_hour || 0).toFixed(1);
 
-                let liveRate = 0;
-                if (previous) {
-                    const deltaMsgs = Math.max(0, (data.total_messages || 0) - previous.total);
-                    const deltaMin = Math.max(0.0833, (stamp - previous.at) / 60000);
-                    liveRate = deltaMsgs / deltaMin;
-                }
-                previous = { total: data.total_messages || 0, at: stamp };
+                const roomCounts = data.room_counts || [];
+                const deltaMin = previous ? Math.max(0.0833, (stamp - previous.at) / 60000) : 1;
+                const prevMap = previous?.roomMap || {};
+
+                const roomRates = {};
+                roomCounts.forEach(r => {
+                    const prevCount = prevMap[r.room_id] || 0;
+                    const delta = Math.max(0, (r.count || 0) - prevCount);
+                    const rate = delta / deltaMin;
+                    if (rate > 0) roomRates[r.room_id] = rate;
+                });
+
+                const liveRate = Object.values(roomRates).reduce((a,b)=>a+b,0);
+                const newMap = Object.fromEntries(roomCounts.map(r => [r.room_id, r.count || 0]));
+                previous = { total: data.total_messages || 0, at: stamp, roomMap: newMap };
 
                 document.getElementById('live-rate').textContent = liveRate.toFixed(1);
-                renderRooms(data.room_counts || []);
-                updateRoomChart(data.room_counts || []);
-                pushLivePoint(liveRate);
+                renderRooms(roomCounts);
+                updateRoomChart(roomCounts);
+                pushRoomRates(roomRates);
 
                 document.getElementById('poll-status').textContent = `live • updated ${stamp.toLocaleTimeString()}`;
             } catch (err) {

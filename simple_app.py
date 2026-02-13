@@ -301,21 +301,45 @@ def get_dong_metrics():
         return None
 
 _dong_cache = {'count': None, 'timestamp': 0}
+_dong_refresh_inflight = False
+_dong_analytics_refresh_inflight = {'24h': False, 'all_time': False}
 
 def get_cached_dong_count():
-    """Get dong count with 30-second caching"""
-    global _dong_cache
+    """Get dong count with stale-while-revalidate caching (never blocks request path)."""
+    global _dong_cache, _dong_refresh_inflight
 
+    # Return cache immediately when available.
     if _dong_cache['count'] is not None:
-        if time.time() - _dong_cache['timestamp'] < 30:
-            return _dong_cache['count']
+        # If stale, refresh in background.
+        if time.time() - _dong_cache['timestamp'] >= 30 and not _dong_refresh_inflight:
+            _dong_refresh_inflight = True
+            def _refresh():
+                global _dong_refresh_inflight
+                try:
+                    count = get_dong_metrics()
+                    if count is not None:
+                        _dong_cache['count'] = count
+                        _dong_cache['timestamp'] = time.time()
+                finally:
+                    _dong_refresh_inflight = False
+            threading.Thread(target=_refresh, daemon=True).start()
+        return _dong_cache['count']
 
-    count = get_dong_metrics()
-    if count is not None:
-        _dong_cache['count'] = count
-        _dong_cache['timestamp'] = time.time()
-        return count
-    return _dong_cache['count'] or 0
+    # Cold start: avoid blocking; seed fallback and refresh async.
+    if not _dong_refresh_inflight:
+        _dong_refresh_inflight = True
+        def _refresh_cold():
+            global _dong_refresh_inflight
+            try:
+                count = get_dong_metrics()
+                if count is not None:
+                    _dong_cache['count'] = count
+                    _dong_cache['timestamp'] = time.time()
+            finally:
+                _dong_refresh_inflight = False
+        threading.Thread(target=_refresh_cold, daemon=True).start()
+
+    return 0
 
 def get_dong_analytics(all_time=False):
     """Get breakdown analytics for each dong variant (bar graph data)"""
@@ -369,22 +393,34 @@ def get_dong_analytics(all_time=False):
 _dong_analytics_cache = {'24h': None, 'all_time': None, 'timestamp_24h': 0, 'timestamp_all': 0}
 
 def get_cached_dong_analytics(all_time=False):
-    """Get dong analytics with 60-second caching"""
-    global _dong_analytics_cache
-    
+    """Get dong analytics with stale-while-revalidate caching (never blocks request path)."""
+    global _dong_analytics_cache, _dong_analytics_refresh_inflight
+
     cache_key = 'all_time' if all_time else '24h'
     time_key = 'timestamp_all' if all_time else 'timestamp_24h'
-    
-    if _dong_analytics_cache[cache_key] is not None:
-        if time.time() - _dong_analytics_cache[time_key] < 60:
-            return _dong_analytics_cache[cache_key]
-    
-    data = get_dong_analytics(all_time=all_time)
-    if data:
-        _dong_analytics_cache[cache_key] = data
-        _dong_analytics_cache[time_key] = time.time()
-        return data
-    return _dong_analytics_cache[cache_key] or {}
+
+    def _maybe_refresh_bg():
+        if _dong_analytics_refresh_inflight[cache_key]:
+            return
+        _dong_analytics_refresh_inflight[cache_key] = True
+        def _refresh():
+            try:
+                data = get_dong_analytics(all_time=all_time)
+                if data:
+                    _dong_analytics_cache[cache_key] = data
+                    _dong_analytics_cache[time_key] = time.time()
+            finally:
+                _dong_analytics_refresh_inflight[cache_key] = False
+        threading.Thread(target=_refresh, daemon=True).start()
+
+    cached = _dong_analytics_cache[cache_key]
+    if cached is not None:
+        if time.time() - _dong_analytics_cache[time_key] >= 60:
+            _maybe_refresh_bg()
+        return cached
+
+    _maybe_refresh_bg()
+    return {}
 
 def get_favorite_word():
     """Find CClub's favorite word (most mentioned non-stop word across all rooms)"""

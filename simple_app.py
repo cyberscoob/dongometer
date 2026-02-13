@@ -1214,8 +1214,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
                     first_ts: {$min: "$origin_server_ts"},
                     last_ts: {$max: "$origin_server_ts"}
                 }},
-                {$sort: {count: -1}},
-                {$limit: 10}
+                {$sort: {last_ts: -1}},
+                {$limit: 25}
             ];
             var results = db.events.aggregate(pipeline);
             var rooms = [];

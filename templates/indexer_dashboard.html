@@ -185,8 +185,23 @@
             }
         });
 
+        function roomAliasFromHash(roomId) {
+            const adjectives = ['Amber','Neon','Velvet','Copper','Lunar','Crimson','Silent','Glitch','Solar','Frost','Jade','Obsidian','Misty','Rapid','Ivory','Nova','Rusty','Cinder','Echo','Azure'];
+            const nouns = ['Atrium','Workshop','Vault','Garden','Archive','Lab','Hall','Forge','Harbor','Nexus','Studio','Library','Sanctum','Terrace','Bridge','Parlor','Den','Signal','Canopy','Beacon'];
+
+            let h = 2166136261;
+            for (let i = 0; i < roomId.length; i++) {
+                h ^= roomId.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            const a = adjectives[Math.abs(h) % adjectives.length];
+            const n = nouns[Math.abs((h >>> 8)) % nouns.length];
+            const num = String(Math.abs((h >>> 16)) % 1000).padStart(3, '0');
+            return `${a} ${n} ${num}`;
+        }
+
         function formatRoomName(roomId) {
-            return channelNames[roomId] || `Room ${roomId.slice(0, 10)}…`;
+            return channelNames[roomId] || roomAliasFromHash(roomId);
         }
 
         function isHot(lastMessageIso) {

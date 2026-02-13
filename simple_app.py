@@ -664,6 +664,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_metrics_fast()
         elif path == '/api/indexer-stats':
             self.serve_indexer_stats()
+        elif path == '/api/indexer-series':
+            self.serve_indexer_series()
         elif path == '/healthz':
             self.serve_healthz()
         elif path == '/coverage':
@@ -1294,6 +1296,91 @@ class DongometerHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self.send_json({'error': str(e)})
     
+    def serve_indexer_series(self):
+        """Serve per-room time series for selectable ranges."""
+        try:
+            import subprocess
+            import json
+
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            range_key = (params.get('range', ['24h'])[0] or '24h').lower()
+
+            range_map = {
+                '1h': (1, 5),
+                '24h': (24, 30),
+                '1week': (24 * 7, 180),
+                '1month': (24 * 30, 720),
+                'all': (24 * 365 * 10, 10080)
+            }
+            hours, bucket_minutes = range_map.get(range_key, range_map['24h'])
+            start_ms = int((datetime.now() - timedelta(hours=hours)).timestamp() * 1000)
+            bucket_ms = bucket_minutes * 60 * 1000
+
+            query = """
+            var startMs = START_MS;
+            var bucketMs = BUCKET_MS;
+            var topRooms = db.events.aggregate([
+              {$match: {origin_server_ts: {$gt: startMs}}},
+              {$group: {_id: "$room_id", count: {$sum: 1}}},
+              {$sort: {count: -1}},
+              {$limit: 6}
+            ]).toArray().map(x => x._id);
+
+            var pipe = [
+              {$match: {origin_server_ts: {$gt: startMs}, room_id: {$in: topRooms}}},
+              {$project: {
+                room_id: 1,
+                bucket: {$floor: {$divide: ["$origin_server_ts", bucketMs]}}
+              }},
+              {$group: {_id: {room_id: "$room_id", bucket: "$bucket"}, count: {$sum: 1}}},
+              {$sort: {"_id.bucket": 1}}
+            ];
+
+            var agg = db.events.aggregate(pipe).toArray();
+            var labels = [];
+            var seriesMap = {};
+
+            agg.forEach(function(d) {
+              var room = d._id.room_id;
+              var bucket = d._id.bucket;
+              if (!seriesMap[room]) seriesMap[room] = {};
+              seriesMap[room][bucket] = d.count;
+              if (labels.indexOf(bucket) === -1) labels.push(bucket);
+            });
+
+            labels.sort(function(a,b){return a-b;});
+            var outSeries = [];
+            for (var room in seriesMap) {
+              var pts = labels.map(function(b) { return seriesMap[room][b] || 0; });
+              outSeries.push({room_id: room, data: pts});
+            }
+
+            var labelText = labels.map(function(b) {
+              return new Date(b * bucketMs).toISOString();
+            });
+
+            print(JSON.stringify({
+              range: RANGE_KEY,
+              bucket_minutes: BUCKET_MIN,
+              labels: labelText,
+              series: outSeries
+            }));
+            """.replace('START_MS', str(start_ms)).replace('BUCKET_MS', str(bucket_ms)).replace('RANGE_KEY', json.dumps(range_key)).replace('BUCKET_MIN', str(bucket_minutes))
+
+            result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
+                capture_output=True, text=True, timeout=35
+            )
+            if result.returncode != 0:
+                self.send_json({'error': result.stderr.strip() or 'series query failed'})
+                return
+
+            payload = json.loads(result.stdout.strip().split('\n')[-1])
+            self.send_json(payload)
+        except Exception as e:
+            self.send_json({'error': str(e)})
+
     def serve_coverage(self):
         """Serve the coverage visualization HTML page"""
         try:

@@ -107,7 +107,16 @@
 
         <div class="charts-grid">
             <div class="section">
-                <h2>Live Ingestion Rate (rolling)</h2>
+                <h2>Live Ingestion Rate by Room</h2>
+                <div style="margin-bottom:10px; color:#9aa0b5;">
+                    Range: <select id="time-range" style="background:#1f2332;color:#fff;border:1px solid #3a3a52;border-radius:8px;padding:4px 8px;">
+                        <option value="1h">1hr</option>
+                        <option value="24h" selected>24hrs</option>
+                        <option value="1week">1week</option>
+                        <option value="1month">1month</option>
+                        <option value="all">all time</option>
+                    </select>
+                </div>
                 <canvas id="liveChart" height="140"></canvas>
             </div>
             <div class="section">
@@ -186,47 +195,38 @@
             return ms <= 2 * 60 * 1000;
         }
 
-        function ensureRoomDataset(roomId, idx) {
-            let ds = liveChart.data.datasets.find(d => d.roomId === roomId);
-            if (!ds) {
-                const color = ROOM_COLORS[idx % ROOM_COLORS.length];
-                ds = {
-                    roomId,
-                    label: formatRoomName(roomId),
-                    data: Array(liveChart.data.labels.length).fill(0),
-                    borderColor: color,
-                    backgroundColor: color + '22',
-                    fill: false,
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 1
-                };
-                liveChart.data.datasets.push(ds);
+        async function updateSeriesChart(rangeKey) {
+            try {
+                const resp = await fetch(`/api/indexer-series?range=${encodeURIComponent(rangeKey)}`, { cache: 'no-store' });
+                const payload = await resp.json();
+                if (payload.error) throw new Error(payload.error);
+
+                const labels = (payload.labels || []).map(ts => {
+                    const d = new Date(ts);
+                    if (rangeKey === '1h' || rangeKey === '24h') {
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                });
+
+                liveChart.data.labels = labels;
+                liveChart.data.datasets = (payload.series || []).slice(0, 8).map((serie, idx) => {
+                    const color = ROOM_COLORS[idx % ROOM_COLORS.length];
+                    return {
+                        label: formatRoomName(serie.room_id),
+                        data: serie.data || [],
+                        borderColor: color,
+                        backgroundColor: color + '22',
+                        fill: false,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 1
+                    };
+                });
+                liveChart.update();
+            } catch (err) {
+                console.error('series chart error', err);
             }
-            return ds;
-        }
-
-        function pushRoomRates(roomRates) {
-            const label = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            liveChart.data.labels.push(label);
-
-            const trackedRooms = Object.keys(roomRates);
-            trackedRooms.forEach((roomId, idx) => ensureRoomDataset(roomId, idx));
-
-            liveChart.data.datasets.forEach(ds => {
-                ds.data.push(Math.max(0, Number(roomRates[ds.roomId] || 0)));
-            });
-
-            while (liveChart.data.labels.length > LIVE_POINTS) {
-                liveChart.data.labels.shift();
-                liveChart.data.datasets.forEach(ds => ds.data.shift());
-            }
-
-            liveChart.data.datasets = liveChart.data.datasets
-                .filter(ds => ds.data.slice(-12).some(v => v > 0.01))
-                .slice(0, 8);
-
-            liveChart.update();
         }
 
         function updateRoomChart(roomCounts) {
@@ -291,7 +291,7 @@
                 document.getElementById('live-rate').textContent = liveRate.toFixed(1);
                 renderRooms(roomCounts);
                 updateRoomChart(roomCounts);
-                pushRoomRates(roomRates);
+                // timeseries graph updates via /api/indexer-series (range selector)
 
                 document.getElementById('poll-status').textContent = `live • updated ${stamp.toLocaleTimeString()}`;
             } catch (err) {
@@ -300,8 +300,20 @@
             }
         }
 
+        const rangeSelect = document.getElementById('time-range');
+        let selectedRange = rangeSelect ? rangeSelect.value : "24h";
+
+        if (rangeSelect) {
+            rangeSelect.addEventListener('change', () => {
+                selectedRange = rangeSelect.value;
+                updateSeriesChart(selectedRange);
+            });
+        }
+
         loadData();
+        updateSeriesChart(selectedRange);
         setInterval(loadData, POLL_MS);
+        setInterval(() => updateSeriesChart(selectedRange), 30000);
     </script>
 </body>
 </html>

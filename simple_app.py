@@ -1865,7 +1865,7 @@ if __name__ == '__main__':
     # Allow socket reuse to avoid "Address already in use" errors
     HTTPServer.allow_reuse_address = True
     
-    server = HTTPServer(('0.0.0.0', 5000), DongometerHandler)
+    server = ThreadingHTTPServer(('0.0.0.0', 5000), DongometerHandler)
     print("🍆 The Dongometer is live on http://localhost:5000")
     print("🍕 Pizza count now uses MongoDB (dynamic, no more crazy multipliers)")
     print("📊 Indexer dashboard at http://localhost:5000/indexer")

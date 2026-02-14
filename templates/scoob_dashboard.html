@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scoob OpenClaw Stats</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0b0f14;color:#d8f0ff;margin:0;padding:20px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+    .card{background:#141c24;border:1px solid #284257;border-radius:10px;padding:12px}
+    h1{margin:0 0 12px;color:#7be6ff}.muted{opacity:.75}
+    table{width:100%;border-collapse:collapse;background:#121922;border:1px solid #284257}
+    th,td{padding:8px;border-bottom:1px solid #223242;font-size:13px;text-align:left}
+    code{background:#1c2631;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <h1>🤖 Scoob OpenClaw Stats</h1>
+  <p class="muted">Live token/session/tool stats from OpenClaw + recent gateway logs</p>
+
+  <div class="grid">
+    <div class="card"><div class="muted">Sessions</div><div id="sessions">-</div></div>
+    <div class="card"><div class="muted">Total Tokens</div><div id="tokens">-</div></div>
+    <div class="card"><div class="muted">Input / Output Tokens</div><div id="io">-</div></div>
+    <div class="card"><div class="muted">Runs (start/done/timeout)</div><div id="runs">-</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div class="muted">OpenClaw Log Source</div>
+    <div id="logPath"><code>-</code></div>
+  </div>
+
+  <h3>Tool Usage (recent log window)</h3>
+  <table id="toolsTable"><thead><tr><th>Tool</th><th>Count</th></tr></thead><tbody></tbody></table>
+
+  <h3 style="margin-top:18px;">Top Sessions by Tokens</h3>
+  <table id="sessionsTable"><thead><tr><th>Session</th><th>Model</th><th>Total</th><th>Input</th><th>Output</th><th>Age (min)</th></tr></thead><tbody></tbody></table>
+
+  <script>
+    function fmt(n){return (n??0).toLocaleString();}
+    async function refresh(){
+      const r=await fetch('/api/scoob-stats');
+      const d=await r.json();
+      document.getElementById('sessions').textContent=fmt(d.sessions.session_count);
+      document.getElementById('tokens').textContent=fmt(d.sessions.total_tokens);
+      document.getElementById('io').textContent=`${fmt(d.sessions.total_input_tokens)} / ${fmt(d.sessions.total_output_tokens)}`;
+      const rc=d.run_counts||{};
+      document.getElementById('runs').textContent=`${fmt(rc.starts)} / ${fmt(rc.done)} / ${fmt(rc.timeouts)}`;
+      document.getElementById('logPath').innerHTML=`<code>${d.log_path||'n/a'}</code>`;
+
+      const tb=document.querySelector('#toolsTable tbody'); tb.innerHTML='';
+      Object.entries(d.tool_usage||{}).forEach(([tool,count])=>{
+        const tr=document.createElement('tr'); tr.innerHTML=`<td>${tool}</td><td>${fmt(count)}</td>`; tb.appendChild(tr);
+      });
+
+      const sb=document.querySelector('#sessionsTable tbody'); sb.innerHTML='';
+      (d.sessions.top_sessions||[]).forEach(s=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${s.key}</td><td>${s.model||''}</td><td>${fmt(s.totalTokens)}</td><td>${fmt(s.inputTokens)}</td><td>${fmt(s.outputTokens)}</td><td>${s.ageMinutes??''}</td>`;
+        sb.appendChild(tr);
+      });
+    }
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>

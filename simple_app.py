@@ -8,10 +8,13 @@ import json
 import sqlite3
 import threading
 import time
+import re
+import glob
+import subprocess
 from datetime import datetime, timedelta
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
-from collections import deque
+from collections import deque, Counter
 
 # Fenthouse auto-poster configuration
 FENTHOUSE_MESSAGES = [
@@ -664,6 +667,85 @@ def calculate_chaos_score():
     # NO MAX CAP - CHAOS IS UNLIMITED
     return score
 
+
+
+def get_openclaw_log_path():
+    try:
+        candidates = glob.glob('/tmp/openclaw/openclaw-*.log')
+        if not candidates:
+            return None
+        candidates.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        return candidates[0]
+    except Exception:
+        return None
+
+
+def get_openclaw_tool_usage(log_path, tail_lines=8000):
+    if not log_path or not os.path.exists(log_path):
+        return {'tool_counts': {}, 'run_counts': {'starts': 0, 'done': 0, 'timeouts': 0}}
+
+    try:
+        result = subprocess.run(['tail', '-n', str(tail_lines), log_path], capture_output=True, text=True, timeout=3)
+        text = result.stdout if result.returncode == 0 else ''
+    except Exception:
+        text = ''
+
+    tool_counter = Counter()
+    for m in re.finditer(r'embedded run tool start:.*?tool=([a-zA-Z0-9_\-]+)', text):
+        tool_counter[m.group(1)] += 1
+
+    starts = len(re.findall(r'embedded run start:', text))
+    done = len(re.findall(r'embedded run done:', text))
+    timeouts = len(re.findall(r'embedded run timeout:', text))
+
+    return {
+        'tool_counts': dict(tool_counter.most_common(20)),
+        'run_counts': {'starts': starts, 'done': done, 'timeouts': timeouts}
+    }
+
+
+def get_scoob_session_stats():
+    out = {
+        'session_count': 0,
+        'total_tokens': 0,
+        'total_input_tokens': 0,
+        'total_output_tokens': 0,
+        'top_sessions': []
+    }
+    try:
+        result = subprocess.run(['openclaw', 'sessions', '--json'], capture_output=True, text=True, timeout=4)
+        if result.returncode != 0:
+            return out
+        data = json.loads(result.stdout)
+        sessions = data.get('sessions', [])
+        out['session_count'] = len(sessions)
+        out['total_tokens'] = sum(int(s.get('totalTokens') or 0) for s in sessions)
+        out['total_input_tokens'] = sum(int(s.get('inputTokens') or 0) for s in sessions)
+        out['total_output_tokens'] = sum(int(s.get('outputTokens') or 0) for s in sessions)
+
+        def age_minutes(s):
+            try:
+                return int((s.get('ageMs') or 0) / 60000)
+            except Exception:
+                return None
+
+        top = sorted(sessions, key=lambda s: int(s.get('totalTokens') or 0), reverse=True)[:8]
+        out['top_sessions'] = [
+            {
+                'key': s.get('key'),
+                'model': s.get('model'),
+                'totalTokens': int(s.get('totalTokens') or 0),
+                'inputTokens': int(s.get('inputTokens') or 0),
+                'outputTokens': int(s.get('outputTokens') or 0),
+                'ageMinutes': age_minutes(s),
+            }
+            for s in top
+        ]
+    except Exception:
+        pass
+    return out
+
+
 class DongometerHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
@@ -696,10 +778,14 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_fentviz_glitch()
         elif path == '/indexer':
             self.serve_indexer_dashboard()
+        elif path == '/scoob':
+            self.serve_scoob_dashboard()
         elif path == '/api/metrics':
             self.serve_metrics_fast()
         elif path == '/api/indexer-stats':
             self.serve_indexer_stats()
+        elif path == '/api/scoob-stats':
+            self.serve_scoob_stats()
         elif path == '/api/indexer-series':
             self.serve_indexer_series()
         elif path == '/healthz':
@@ -1206,8 +1292,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
             'top_words': [],
             'last_updated': metrics.get('last_updated'),
             'status': 'ACTIVE',
-            'matrix_indexer_messages': 0,
-            'matrix_indexer_rooms': 0,
+            'matrix_indexer_messages': get_indexer_count() or 0,
+            'matrix_indexer_rooms': get_indexer_rooms() or 0,
             'fenthouse_active': False,
             'fenthouse_countdown': None
         }
@@ -1226,6 +1312,31 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.wfile.write(content.encode())
         except FileNotFoundError:
             self.send_error(404)
+
+    def serve_scoob_dashboard(self):
+        try:
+            with open(os.path.join(os.path.dirname(__file__), 'templates/scoob_dashboard.html'), 'r') as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(content.encode())
+        except FileNotFoundError:
+            self.send_error(404)
+
+    def serve_scoob_stats(self):
+        log_path = get_openclaw_log_path()
+        usage = get_openclaw_tool_usage(log_path)
+        sessions = get_scoob_session_stats()
+
+        data = {
+            'timestamp': datetime.now().isoformat(),
+            'log_path': log_path,
+            'tool_usage': usage.get('tool_counts', {}),
+            'run_counts': usage.get('run_counts', {}),
+            'sessions': sessions,
+        }
+        self.send_json(data)
     
     def serve_indexer_stats(self):
         """Serve indexer statistics with anonymized channel names"""

@@ -11,6 +11,7 @@ import time
 import re
 import glob
 import subprocess
+import base64
 from datetime import datetime, timedelta
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
@@ -31,6 +32,10 @@ MATRIX_ACCESS_TOKEN = os.environ.get('MATRIX_ACCESS_TOKEN')
 FENTHOUSE_ROOM_ID = os.environ.get('FENTHOUSE_ROOM_ID', '!rfkqkxlyocxeqmrbxi:cclub.cs.wmich.edu')  # Internal room ID
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'dongometer.db')
+
+# Scoob feed auth (defaults to gateway token if explicit password is not set)
+SCOOB_FEED_USER = os.environ.get('SCOOB_FEED_USER', 'scoob')
+SCOOB_FEED_PASSWORD = os.environ.get('SCOOB_FEED_PASSWORD') or os.environ.get('OPENCLAW_GATEWAY_TOKEN')
 
 # Matrix indexer cache
 _indexer_cache = {'count': None, 'timestamp': 0, 'rooms': None}
@@ -704,6 +709,38 @@ def get_openclaw_tool_usage(log_path, tail_lines=8000):
     }
 
 
+
+
+def get_scoob_feed_lines(limit=200):
+    """Return recent filtered gateway lines useful for Scoob debugging."""
+    try:
+        log_files = sorted(glob.glob('/tmp/openclaw/openclaw-*.log'))
+        if not log_files:
+            return []
+        latest = log_files[-1]
+        with open(latest, 'r', errors='ignore') as f:
+            lines = f.readlines()[-5000:]
+        keep = []
+        pats = (
+            'matrix-auto-reply',
+            'agent/embedded',
+            'diagnostic',
+            'LLM request timed out',
+            'embedded run timeout',
+            'embedded run start',
+            'embedded run done',
+            'stuck session',
+            'skipping room message',
+            'Config validation failed',
+            'thinkingLevel',
+        )
+        for line in lines:
+            if any(p in line for p in pats):
+                keep.append(line.rstrip('\n'))
+        return keep[-max(1, int(limit)):]
+    except Exception:
+        return []
+
 def get_scoob_session_stats():
     out = {
         'session_count': 0,
@@ -776,6 +813,30 @@ class DongometerHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+    def _check_feed_auth(self):
+        # Require Basic auth for Scoob feed endpoints
+        if not SCOOB_FEED_PASSWORD:
+            return False
+        auth = self.headers.get('Authorization', '')
+        if not auth.startswith('Basic '):
+            return False
+        try:
+            decoded = base64.b64decode(auth.split(' ', 1)[1]).decode('utf-8', errors='ignore')
+            user, pw = decoded.split(':', 1)
+            return (user == SCOOB_FEED_USER and pw == SCOOB_FEED_PASSWORD)
+        except Exception:
+            return False
+
+    def _require_feed_auth(self):
+        if self._check_feed_auth():
+            return True
+        self.send_response(401)
+        self.send_header('WWW-Authenticate', 'Basic realm="Scoob Feed"')
+        self.send_header('Content-Type', 'text/plain; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(b'Auth required')
+        return False
+
     def do_HEAD(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -812,6 +873,14 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_indexer_stats()
         elif path == '/api/scoob-stats':
             self.serve_scoob_stats()
+        elif path == '/scoob-feed':
+            if not self._require_feed_auth():
+                return
+            self.serve_scoob_feed_page()
+        elif path == '/api/scoob-feed':
+            if not self._require_feed_auth():
+                return
+            self.serve_scoob_feed()
         elif path == '/api/indexer-series':
             self.serve_indexer_series()
         elif path == '/healthz':
@@ -1349,6 +1418,28 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.wfile.write(content.encode())
         except FileNotFoundError:
             self.send_error(404)
+
+
+
+    def serve_scoob_feed_page(self):
+        html = """<!doctype html><html><head><meta charset='utf-8'><title>Scoob Feed</title>
+<style>body{font-family:ui-monospace,Menlo,Consolas,monospace;background:#0b1020;color:#d7e0ff;margin:0}#h{padding:10px 14px;border-bottom:1px solid #243055}pre{margin:0;padding:14px;white-space:pre-wrap;word-break:break-word}</style>
+</head><body><div id='h'>Scoob live feed (auth protected) · auto-refresh 2s</div><pre id='out'>loading...</pre>
+<script>async function tick(){try{const r=await fetch('/api/scoob-feed?limit=220',{cache:'no-store'});const j=await r.json();document.getElementById('out').textContent=(j.lines||[]).join('\n')||'(no lines yet)'}catch(e){document.getElementById('out').textContent='feed error: '+e}setTimeout(tick,2000)}tick();</script></body></html>"""
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(html.encode('utf-8'))
+
+    def serve_scoob_feed(self):
+        parsed = urlparse(self.path)
+        q = parse_qs(parsed.query)
+        try:
+            limit = int((q.get('limit') or ['200'])[0])
+        except Exception:
+            limit = 200
+        lines = get_scoob_feed_lines(limit=limit)
+        self.send_json({'ok': True, 'count': len(lines), 'lines': lines})
 
     def serve_scoob_stats(self):
         log_path = get_openclaw_log_path()

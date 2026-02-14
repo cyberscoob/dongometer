@@ -20,21 +20,23 @@
 
   <div class="grid">
     <div class="card"><div class="muted">Sessions</div><div id="sessions">-</div></div>
-    <div class="card"><div class="muted">Total Tokens</div><div id="tokens">-</div></div>
-    <div class="card"><div class="muted">Input / Output Tokens</div><div id="io">-</div></div>
+    <div class="card"><div class="muted">Total Context Tokens</div><div id="tokens">-</div></div>
+    <div class="card"><div class="muted">Reported Input / Output Tokens</div><div id="io">-</div></div>
     <div class="card"><div class="muted">Runs (start/done/timeout)</div><div id="runs">-</div></div>
   </div>
 
   <div class="card" style="margin-bottom:12px;">
     <div class="muted">OpenClaw Log Source</div>
     <div id="logPath"><code>-</code></div>
+    <div id="ioNote" class="muted" style="margin-top:6px;"></div>
+    <div id="anomaly" style="margin-top:6px;color:#ffd37a;"></div>
   </div>
 
   <h3>Tool Usage (recent log window)</h3>
   <table id="toolsTable"><thead><tr><th>Tool</th><th>Count</th></tr></thead><tbody></tbody></table>
 
-  <h3 style="margin-top:18px;">Top Sessions by Tokens</h3>
-  <table id="sessionsTable"><thead><tr><th>Session</th><th>Model</th><th>Total</th><th>Input</th><th>Output</th><th>Age (min)</th></tr></thead><tbody></tbody></table>
+  <h3 style="margin-top:18px;">Top Sessions by Context Tokens</h3>
+  <table id="sessionsTable"><thead><tr><th>Session</th><th>Model</th><th>Total</th><th>Ctx Limit</th><th>Input*</th><th>Output*</th><th>Age (min)</th></tr></thead><tbody></tbody></table>
 
   <script>
     function fmt(n){return (n??0).toLocaleString();}
@@ -44,6 +46,9 @@
       document.getElementById('sessions').textContent=fmt(d.sessions.session_count);
       document.getElementById('tokens').textContent=fmt(d.sessions.total_tokens);
       document.getElementById('io').textContent=`${fmt(d.sessions.total_input_tokens)} / ${fmt(d.sessions.total_output_tokens)}`;
+      document.getElementById('ioNote').textContent=d.sessions.io_tokens_note||'';
+      const ac=d.sessions.anomaly_count||0;
+      document.getElementById('anomaly').textContent=ac>0?`⚠ ${ac} session(s) have suspicious token accounting (input >> context).`:'';
       const rc=d.run_counts||{};
       document.getElementById('runs').textContent=`${fmt(rc.starts)} / ${fmt(rc.done)} / ${fmt(rc.timeouts)}`;
       document.getElementById('logPath').innerHTML=`<code>${d.log_path||'n/a'}</code>`;
@@ -56,7 +61,7 @@
       const sb=document.querySelector('#sessionsTable tbody'); sb.innerHTML='';
       (d.sessions.top_sessions||[]).forEach(s=>{
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${s.key}</td><td>${s.model||''}</td><td>${fmt(s.totalTokens)}</td><td>${fmt(s.inputTokens)}</td><td>${fmt(s.outputTokens)}</td><td>${s.ageMinutes??''}</td>`;
+        tr.innerHTML=`<td>${s.key}</td><td>${s.model||''}</td><td>${fmt(s.totalTokens)}</td><td>${fmt(s.contextTokens)}</td><td>${fmt(s.inputTokens)}</td><td>${fmt(s.outputTokens)}</td><td>${s.ageMinutes??''}</td>`;
         sb.appendChild(tr);
       });
     }

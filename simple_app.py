@@ -710,6 +710,9 @@ def get_scoob_session_stats():
         'total_tokens': 0,
         'total_input_tokens': 0,
         'total_output_tokens': 0,
+        'io_tokens_note': 'input/output token fields are provider-reported and may be cumulative across runs',
+        'anomaly_count': 0,
+        'anomalies': [],
         'top_sessions': []
     }
     try:
@@ -729,6 +732,28 @@ def get_scoob_session_stats():
             except Exception:
                 return None
 
+        def find_anomaly(s):
+            try:
+                key = s.get('key')
+                t = int(s.get('totalTokens') or 0)
+                i = int(s.get('inputTokens') or 0)
+                c = int(s.get('contextTokens') or 0)
+                if c > 0 and i > c * 2 and t >= int(c * 0.9):
+                    return {
+                        'key': key,
+                        'reason': 'reported inputTokens far exceeds contextTokens while totalTokens is near context window cap',
+                        'totalTokens': t,
+                        'inputTokens': i,
+                        'contextTokens': c,
+                    }
+            except Exception:
+                return None
+            return None
+
+        anomalies = [a for a in (find_anomaly(s) for s in sessions) if a]
+        out['anomaly_count'] = len(anomalies)
+        out['anomalies'] = anomalies[:6]
+
         top = sorted(sessions, key=lambda s: int(s.get('totalTokens') or 0), reverse=True)[:8]
         out['top_sessions'] = [
             {
@@ -737,6 +762,7 @@ def get_scoob_session_stats():
                 'totalTokens': int(s.get('totalTokens') or 0),
                 'inputTokens': int(s.get('inputTokens') or 0),
                 'outputTokens': int(s.get('outputTokens') or 0),
+                'contextTokens': int(s.get('contextTokens') or 0),
                 'ageMinutes': age_minutes(s),
             }
             for s in top

@@ -1464,7 +1464,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
             # Get total messages
             result = subprocess.run(
                 ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', 
-                 'print(db.events.estimatedDocumentCount())'],
+                 'print(db.events.countDocuments({}))'],
                 capture_output=True, text=True, timeout=10
             )
             total_messages = int(result.stdout.strip()) if result.returncode == 0 else 0
@@ -1547,12 +1547,28 @@ class DongometerHandler(BaseHTTPRequestHandler):
             
             # Calculate hourly rate
             hourly_rate = sum(t['count'] for t in timeline) / 24 if timeline else 0
+
+            # Get latest event timestamp for live freshness indicator
+            latest_query = '''
+            var doc = db.events.find().sort({origin_server_ts: -1}).limit(1).next();
+            var ts = doc.origin_server_ts;
+            var high = ts.high || 0;
+            var low = ts.low || ts;
+            var timestamp = (high * 4294967296) + (low >>> 0);
+            print(new Date(timestamp).toISOString());
+            '''
+            latest_result = subprocess.run(
+                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', latest_query],
+                capture_output=True, text=True, timeout=10
+            )
+            latest_event_at = latest_result.stdout.strip().split('\n')[-1] if latest_result.returncode == 0 else None
             
             data = {
                 'total_messages': total_messages,
                 'unique_rooms': len(room_counts),
                 'first_message_date': first_date,
                 'messages_per_hour': hourly_rate,
+                'latest_event_at': latest_event_at,
                 'room_counts': room_counts,
                 'timeline': timeline
             }

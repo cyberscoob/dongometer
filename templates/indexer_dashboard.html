@@ -97,7 +97,7 @@
         </div>
 
         <div class="metrics-grid">
-            <div class="metric-card"><div class="metric-label">Total Messages</div><div class="metric-value" id="total-messages">-</div></div>
+            <div class="metric-card"><div class="metric-label">Total Messages (live)</div><div class="metric-value" id="total-messages">-</div><div class="room-meta" id="total-meta">warming up…</div></div>
             <div class="metric-card"><div class="metric-label">Rooms Tracked</div><div class="metric-value" id="active-channels">-</div></div>
             <div class="metric-card"><div class="metric-label">Indexed Since</div><div class="metric-value" id="index-since">-</div></div>
             <div class="metric-card"><div class="metric-label">Msgs/Hour (24h avg)</div><div class="metric-value" id="msg-rate">-</div></div>
@@ -282,10 +282,23 @@
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
 
-                document.getElementById('total-messages').textContent = (data.total_messages || 0).toLocaleString();
+                const totalNow = Number(data.total_messages || 0);
+                const totalPrev = previous ? Number(previous.total || 0) : totalNow;
+                const totalDelta = Math.max(0, totalNow - totalPrev);
+
+                document.getElementById('total-messages').textContent = totalNow.toLocaleString();
                 document.getElementById('active-channels').textContent = data.unique_rooms ?? 0;
                 document.getElementById('index-since').textContent = data.first_message_date || 'Unknown';
                 document.getElementById('msg-rate').textContent = Number(data.messages_per_hour || 0).toFixed(1);
+
+                const latestIso = data.latest_event_at;
+                const freshSec = latestIso ? Math.max(0, Math.floor((Date.now() - new Date(latestIso).getTime()) / 1000)) : null;
+                const metaBits = [];
+                metaBits.push(totalDelta > 0 ? `+${totalDelta} this poll` : '+0 this poll');
+                if (freshSec !== null && Number.isFinite(freshSec)) {
+                    metaBits.push(`latest event ${freshSec}s ago`);
+                }
+                document.getElementById('total-meta').textContent = metaBits.join(' • ');
 
                 const roomCounts = data.room_counts || [];
                 const deltaMin = previous ? Math.max(0.0833, (stamp - previous.at) / 60000) : 1;

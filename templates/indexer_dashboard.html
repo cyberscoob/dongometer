@@ -116,6 +116,10 @@
                         <option value="1month">1month</option>
                         <option value="all">all time</option>
                     </select>
+                    • Mode: <select id="time-mode" style="background:#1f2332;color:#fff;border:1px solid #3a3a52;border-radius:8px;padding:4px 8px;">
+                        <option value="ingestion" selected>Ingestion time</option>
+                        <option value="event">Event timestamp</option>
+                    </select>
                 </div>
                 <canvas id="liveChart" height="140"></canvas>
             </div>
@@ -145,7 +149,6 @@
             '!dkaEtUvJgNFDmbmfPL:cclub.cs.wmich.edu': 'The Study'
         };
 
-        const POLL_MS = 5000;
         const LIVE_POINTS = 36;
         const ROOM_COLORS = ['#00ff88','#00d9ff','#ff77ff','#ffb347','#ff6b6b','#9d84ff','#89ffde','#ffd166','#7bdff2','#caffbf'];
         let previous = null;
@@ -210,9 +213,9 @@
             return ms <= 2 * 60 * 1000;
         }
 
-        async function updateSeriesChart(rangeKey) {
+        async function updateSeriesChart(rangeKey, modeKey) {
             try {
-                const resp = await fetch(`/api/indexer-series?range=${encodeURIComponent(rangeKey)}`, { cache: 'no-store' });
+                const resp = await fetch(`/api/indexer-series?range=${encodeURIComponent(rangeKey)}&mode=${encodeURIComponent(modeKey || 'ingestion')}`, { cache: 'no-store' });
                 const payload = await resp.json();
                 if (payload.error) throw new Error(payload.error);
 
@@ -275,53 +278,54 @@
             document.getElementById('hot-rooms').textContent = roomCounts.filter(r => isHot(r.last_message)).length;
         }
 
-        async function loadData() {
+        function applySnapshot(data) {
             const stamp = new Date();
+            const totalNow = Number(data.total_messages || 0);
+            const totalPrev = previous ? Number(previous.total || 0) : totalNow;
+            const totalDelta = Math.max(0, totalNow - totalPrev);
+
+            document.getElementById('total-messages').textContent = totalNow.toLocaleString();
+            document.getElementById('active-channels').textContent = data.unique_rooms ?? 0;
+            document.getElementById('index-since').textContent = data.first_message_date || 'Unknown';
+            document.getElementById('msg-rate').textContent = Number(data.messages_per_hour || 0).toFixed(1);
+
+            const latestIso = data.latest_event_at;
+            const freshSec = latestIso ? Math.max(0, Math.floor((Date.now() - new Date(latestIso).getTime()) / 1000)) : null;
+            const metaBits = [];
+            metaBits.push(totalDelta > 0 ? `+${totalDelta} this push` : '+0 this push');
+            if (freshSec !== null && Number.isFinite(freshSec)) {
+                metaBits.push(`latest event ${freshSec}s ago`);
+            }
+            document.getElementById('total-meta').textContent = metaBits.join(' • ');
+
+            const roomCounts = data.room_counts || [];
+            const deltaMin = previous ? Math.max(0.0833, (stamp - previous.at) / 60000) : 1;
+            const prevMap = previous?.roomMap || {};
+
+            const roomRates = {};
+            roomCounts.forEach(r => {
+                const prevCount = prevMap[r.room_id] || 0;
+                const delta = Math.max(0, (r.count || 0) - prevCount);
+                const rate = delta / deltaMin;
+                if (rate > 0) roomRates[r.room_id] = rate;
+            });
+
+            const liveRate = Object.values(roomRates).reduce((a,b)=>a+b,0);
+            const newMap = Object.fromEntries(roomCounts.map(r => [r.room_id, r.count || 0]));
+            previous = { total: data.total_messages || 0, at: stamp, roomMap: newMap };
+
+            document.getElementById('live-rate').textContent = liveRate.toFixed(1);
+            renderRooms(roomCounts);
+            updateRoomChart(roomCounts);
+            document.getElementById('poll-status').textContent = `socket live • ${stamp.toLocaleTimeString()}`;
+        }
+
+        async function loadDataFallback() {
             try {
                 const response = await fetch('/api/indexer-stats', { cache: 'no-store' });
                 const data = await response.json();
                 if (data.error) throw new Error(data.error);
-
-                const totalNow = Number(data.total_messages || 0);
-                const totalPrev = previous ? Number(previous.total || 0) : totalNow;
-                const totalDelta = Math.max(0, totalNow - totalPrev);
-
-                document.getElementById('total-messages').textContent = totalNow.toLocaleString();
-                document.getElementById('active-channels').textContent = data.unique_rooms ?? 0;
-                document.getElementById('index-since').textContent = data.first_message_date || 'Unknown';
-                document.getElementById('msg-rate').textContent = Number(data.messages_per_hour || 0).toFixed(1);
-
-                const latestIso = data.latest_event_at;
-                const freshSec = latestIso ? Math.max(0, Math.floor((Date.now() - new Date(latestIso).getTime()) / 1000)) : null;
-                const metaBits = [];
-                metaBits.push(totalDelta > 0 ? `+${totalDelta} this poll` : '+0 this poll');
-                if (freshSec !== null && Number.isFinite(freshSec)) {
-                    metaBits.push(`latest event ${freshSec}s ago`);
-                }
-                document.getElementById('total-meta').textContent = metaBits.join(' • ');
-
-                const roomCounts = data.room_counts || [];
-                const deltaMin = previous ? Math.max(0.0833, (stamp - previous.at) / 60000) : 1;
-                const prevMap = previous?.roomMap || {};
-
-                const roomRates = {};
-                roomCounts.forEach(r => {
-                    const prevCount = prevMap[r.room_id] || 0;
-                    const delta = Math.max(0, (r.count || 0) - prevCount);
-                    const rate = delta / deltaMin;
-                    if (rate > 0) roomRates[r.room_id] = rate;
-                });
-
-                const liveRate = Object.values(roomRates).reduce((a,b)=>a+b,0);
-                const newMap = Object.fromEntries(roomCounts.map(r => [r.room_id, r.count || 0]));
-                previous = { total: data.total_messages || 0, at: stamp, roomMap: newMap };
-
-                document.getElementById('live-rate').textContent = liveRate.toFixed(1);
-                renderRooms(roomCounts);
-                updateRoomChart(roomCounts);
-                // timeseries graph updates via /api/indexer-series (range selector)
-
-                document.getElementById('poll-status').textContent = `live • updated ${stamp.toLocaleTimeString()}`;
+                applySnapshot(data);
             } catch (err) {
                 console.error(err);
                 document.getElementById('poll-status').innerHTML = `<span class="error">error: ${err.message}</span>`;
@@ -329,19 +333,50 @@
         }
 
         const rangeSelect = document.getElementById('time-range');
+        const modeSelect = document.getElementById('time-mode');
         let selectedRange = rangeSelect ? rangeSelect.value : "24h";
+        let selectedMode = modeSelect ? modeSelect.value : "ingestion";
 
         if (rangeSelect) {
             rangeSelect.addEventListener('change', () => {
                 selectedRange = rangeSelect.value;
-                updateSeriesChart(selectedRange);
+                updateSeriesChart(selectedRange, selectedMode);
             });
         }
 
-        loadData();
-        updateSeriesChart(selectedRange);
-        setInterval(loadData, POLL_MS);
-        setInterval(() => updateSeriesChart(selectedRange), 30000);
+        if (modeSelect) {
+            modeSelect.addEventListener('change', () => {
+                selectedMode = modeSelect.value;
+                updateSeriesChart(selectedRange, selectedMode);
+            });
+        }
+
+        function startIndexerSocket() {
+            if (typeof EventSource === 'undefined') {
+                document.getElementById('poll-status').textContent = 'no EventSource; using fallback polling';
+                loadDataFallback();
+                setInterval(loadDataFallback, 5000);
+                return;
+            }
+
+            const es = new EventSource('/api/indexer-events');
+            es.addEventListener('stats', (evt) => {
+                try {
+                    const data = JSON.parse(evt.data);
+                    applySnapshot(data);
+                } catch (e) {
+                    console.error('Bad SSE payload', e);
+                }
+            });
+            es.onerror = () => {
+                document.getElementById('poll-status').innerHTML = '<span class="error">socket reconnecting…</span>';
+            };
+        }
+
+        loadDataFallback(); // immediate paint
+        startIndexerSocket();
+        updateSeriesChart(selectedRange, selectedMode);
+        setInterval(() => updateSeriesChart(selectedRange, selectedMode), 30000);
     </script>
 </body>
 </html>

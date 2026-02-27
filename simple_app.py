@@ -41,6 +41,159 @@ SCOOB_FEED_PASSWORD = os.environ.get('SCOOB_FEED_PASSWORD') or os.environ.get('O
 _indexer_cache = {'count': None, 'timestamp': 0, 'rooms': None}
 _metrics_cache = {'data': None, 'timestamp': 0}
 
+# High-performance indexer snapshot (server-owned query only; client cannot submit queries)
+INDEXER_HEARTBEAT_SECONDS = 5
+_indexer_snapshot_lock = threading.Lock()
+_indexer_snapshot = {
+    'total_messages': 0,
+    'unique_rooms': 0,
+    'first_message_date': 'Unknown',
+    'messages_per_hour': 0.0,
+    'latest_event_at': None,
+    'room_counts': [],
+    'timeline': [],
+    'generated_at': None,
+}
+
+
+def _run_mongo_json(js_code: str, timeout: int = 12):
+    """Execute fixed server-side mongosh script and parse a single JSON object from stdout."""
+    result = subprocess.run(
+        ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', js_code],
+        capture_output=True, text=True, timeout=timeout
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or 'mongosh failed')
+
+    for line in reversed(result.stdout.strip().split('\n')):
+        line = line.strip()
+        if line.startswith('{') and line.endswith('}'):
+            return json.loads(line)
+    raise RuntimeError('No JSON payload from mongosh')
+
+
+def build_indexer_snapshot():
+    """Single crafted aggregation query for indexer dashboard data."""
+    js_code = """
+    const now = Date.now();
+    const dayAgo = now - (24 * 60 * 60 * 1000);
+
+    const summary = db.events.aggregate([
+      {
+        $facet: {
+          totals: [
+            {
+              $group: {
+                _id: null,
+                total_messages: { $sum: 1 },
+                unique_rooms_set: { $addToSet: "$room_id" },
+                first_ts: { $min: "$origin_server_ts" },
+                latest_ts: { $max: "$origin_server_ts" }
+              }
+            },
+            {
+              $project: {
+                _id: 0,
+                total_messages: 1,
+                unique_rooms: { $size: "$unique_rooms_set" },
+                first_ts: 1,
+                latest_ts: 1
+              }
+            }
+          ],
+          room_counts: [
+            {
+              $group: {
+                _id: "$room_id",
+                count: { $sum: 1 },
+                first_ts: { $min: "$origin_server_ts" },
+                last_ts: { $max: "$origin_server_ts" }
+              }
+            },
+            { $sort: { last_ts: -1 } },
+            { $limit: 25 }
+          ],
+          timeline: [
+            { $match: { origin_server_ts: { $gt: dayAgo } } },
+            {
+              $group: {
+                _id: { $hour: { $toDate: "$origin_server_ts" } },
+                count: { $sum: 1 }
+              }
+            },
+            { $sort: { _id: 1 } }
+          ]
+        }
+      }
+    ]).toArray()[0] || {};
+
+    function toIso(v) {
+      if (v === null || v === undefined) return null;
+      const n = Number(v);
+      if (!Number.isFinite(n)) return null;
+      return new Date(n).toISOString();
+    }
+
+    const totals = (summary.totals && summary.totals[0]) || { total_messages: 0, unique_rooms: 0, first_ts: null, latest_ts: null };
+
+    const hoursMap = {};
+    (summary.timeline || []).forEach(h => { hoursMap[String(h._id)] = h.count; });
+    const timeline = [];
+    for (let i = 0; i < 24; i++) {
+      timeline.push({ hour: `${i}:00`, count: Number(hoursMap[String(i)] || 0) });
+    }
+
+    const roomCounts = (summary.room_counts || []).map(r => ({
+      room_id: r._id,
+      count: Number(r.count || 0),
+      first_message: toIso(r.first_ts),
+      last_message: toIso(r.last_ts)
+    }));
+
+    const hourlyRate = timeline.reduce((acc, t) => acc + Number(t.count || 0), 0) / 24;
+
+    const payload = {
+      total_messages: Number(totals.total_messages || 0),
+      unique_rooms: Number(totals.unique_rooms || 0),
+      first_message_date: toIso(totals.first_ts) ? toIso(totals.first_ts).split('T')[0] : 'Unknown',
+      messages_per_hour: hourlyRate,
+      latest_event_at: toIso(totals.latest_ts),
+      room_counts: roomCounts,
+      timeline: timeline,
+      generated_at: new Date().toISOString()
+    };
+
+    print(JSON.stringify(payload));
+    """
+    return _run_mongo_json(js_code, timeout=20)
+
+
+def get_indexer_snapshot_cached(force_refresh: bool = False):
+    now = time.time()
+    with _indexer_snapshot_lock:
+        age = now - _indexer_snapshot.get('_ts', 0)
+        if not force_refresh and _indexer_snapshot.get('generated_at') and age < INDEXER_HEARTBEAT_SECONDS:
+            snap = dict(_indexer_snapshot)
+            snap.pop('_ts', None)
+            return snap
+
+    data = build_indexer_snapshot()
+    with _indexer_snapshot_lock:
+        data['_ts'] = time.time()
+        _indexer_snapshot.update(data)
+        snap = dict(_indexer_snapshot)
+        snap.pop('_ts', None)
+        return snap
+
+
+def indexer_snapshot_loop():
+    while True:
+        try:
+            get_indexer_snapshot_cached(force_refresh=True)
+        except Exception as e:
+            print(f"Indexer snapshot refresh error: {e}")
+        time.sleep(INDEXER_HEARTBEAT_SECONDS)
+
 def get_indexer_metrics():
     """Get message counts from MongoDB indexer for last 5min/10min/hour"""
     global _metrics_cache
@@ -250,6 +403,7 @@ def get_glizz_metrics():
         return None
 
 _glizz_cache = {'count': None, 'timestamp': 0}
+_mod_cache = {'data': None, 'timestamp': 0}
 
 def get_cached_glizz_count():
     """Get glizz count with 30-second caching"""
@@ -265,6 +419,66 @@ def get_cached_glizz_count():
         _glizz_cache['timestamp'] = time.time()
         return count
     return _glizz_cache['count'] or 0
+
+def get_moderation_days_since():
+    """Days since moderation-like events from Matrix index (cached, read-only)."""
+    global _mod_cache
+    if _mod_cache['data'] is not None and time.time() - _mod_cache['timestamp'] < 30:
+        return _mod_cache['data']
+
+    try:
+        js = r'''
+        var now = Date.now();
+        function daysSince(ts) {
+          if (!ts) return null;
+          var n = Number(ts);
+          if (!Number.isFinite(n)) return null;
+          return Math.floor((now - n) / 86400000);
+        }
+
+        function latestTs(filter) {
+          var doc = db.events.find(filter, {origin_server_ts:1}).sort({origin_server_ts:-1}).limit(1).toArray()[0];
+          return doc ? Number(doc.origin_server_ts) : null;
+        }
+
+        var bannedTs = latestTs({type:'m.room.member', 'content.membership':'ban'});
+        var kickedTs = latestTs({
+          type:'m.room.member',
+          'content.membership':'leave',
+          'unsigned.prev_content.membership':'join',
+          $expr: {$ne:['$sender','$state_key']}
+        });
+        var redactedTs = latestTs({type:'m.room.redaction'});
+        var downvoteTs = latestTs({
+          $or:[
+            {type:'m.reaction', 'content.m.relates_to.key': {$in:['👎',':-1:','⬇️','downvote']}},
+            {type:'m.room.message', 'content.body': {$regex:'\\bdownvot(e|ed|ing)?\\b', $options:'i'}}
+          ]
+        });
+        var thumbsDownTs = latestTs({type:'m.reaction', 'content.m.relates_to.key': {$in:['👎',':-1:']}});
+
+        print(JSON.stringify({
+          kicked_days_since: daysSince(kickedTs),
+          banned_days_since: daysSince(bannedTs),
+          redacted_days_since: daysSince(redactedTs),
+          downvoted_days_since: daysSince(downvoteTs),
+          thumbs_down_days_since: daysSince(thumbsDownTs)
+        }));
+        '''
+
+        payload = _run_mongo_json(js, timeout=15)
+        _mod_cache['data'] = payload
+        _mod_cache['timestamp'] = time.time()
+        return payload
+    except Exception as e:
+        print(f"Moderation metrics error: {e}")
+        return {
+            'kicked_days_since': None,
+            'banned_days_since': None,
+            'redacted_days_since': None,
+            'downvoted_days_since': None,
+            'thumbs_down_days_since': None,
+        }
 
 def get_dong_metrics():
     """Get dong count from MongoDB indexer - tracks CClub culture/energy"""
@@ -669,6 +883,33 @@ def calculate_chaos_score():
             pizza_bonus += math.log10(pizza_count) * 50  # Scaling bonus
         score += pizza_bonus
 
+    # Moderation recency contributes to chaos.
+    # More recent moderation activity => more chaos.
+    mod = get_moderation_days_since()
+    def recency_boost(days, max_points):
+        if days is None:
+            return 0.0
+        d = max(0, int(days))
+        if d == 0:
+            return float(max_points)
+        if d <= 1:
+            return float(max_points) * 0.85
+        if d <= 3:
+            return float(max_points) * 0.65
+        if d <= 7:
+            return float(max_points) * 0.45
+        if d <= 14:
+            return float(max_points) * 0.25
+        if d <= 30:
+            return float(max_points) * 0.10
+        return 0.0
+
+    score += recency_boost(mod.get('kicked_days_since'), 16)
+    score += recency_boost(mod.get('banned_days_since'), 22)
+    score += recency_boost(mod.get('redacted_days_since'), 14)
+    score += recency_boost(mod.get('downvoted_days_since'), 10)
+    score += recency_boost(mod.get('thumbs_down_days_since'), 8)
+
     # NO MAX CAP - CHAOS IS UNLIMITED
     return score
 
@@ -871,6 +1112,8 @@ class DongometerHandler(BaseHTTPRequestHandler):
             self.serve_metrics_fast()
         elif path == '/api/indexer-stats':
             self.serve_indexer_stats()
+        elif path == '/api/indexer-events':
+            self.serve_indexer_events()
         elif path == '/api/scoob-stats':
             self.serve_scoob_stats()
         elif path == '/scoob-feed':
@@ -1373,6 +1616,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
         chat_5m = sum(1 for t in metrics['chat_velocity'] if now - t < timedelta(minutes=5))
         chat_1h = len(metrics['chat_velocity'])
         door_10m = sum(1 for t in metrics['door_events'] if now - t < timedelta(minutes=10))
+        mod_days = get_moderation_days_since()
         data = {
             'chaos_score': round(calculate_chaos_score(), 1),
             'chat_velocity_5min': chat_5m,
@@ -1390,7 +1634,12 @@ class DongometerHandler(BaseHTTPRequestHandler):
             'matrix_indexer_messages': get_indexer_count() or 0,
             'matrix_indexer_rooms': get_indexer_rooms() or 0,
             'fenthouse_active': False,
-            'fenthouse_countdown': None
+            'fenthouse_countdown': None,
+            'kicked_days_since': mod_days.get('kicked_days_since'),
+            'banned_days_since': mod_days.get('banned_days_since'),
+            'redacted_days_since': mod_days.get('redacted_days_since'),
+            'downvoted_days_since': mod_days.get('downvoted_days_since'),
+            'thumbs_down_days_since': mod_days.get('thumbs_down_days_since')
         }
         self.send_json(data)
 
@@ -1456,125 +1705,33 @@ class DongometerHandler(BaseHTTPRequestHandler):
         self.send_json(data)
     
     def serve_indexer_stats(self):
-        """Serve indexer statistics with anonymized channel names"""
+        """Serve indexer statistics from server-owned cached snapshot."""
         try:
-            import subprocess
-            import json
-            
-            # Get total messages
-            result = subprocess.run(
-                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', 
-                 'print(db.events.countDocuments({}))'],
-                capture_output=True, text=True, timeout=10
-            )
-            total_messages = int(result.stdout.strip()) if result.returncode == 0 else 0
-            
-            # Get room counts with first/last message dates (top 10)
-            query = '''
-            var pipeline = [
-                {$group: {
-                    _id: "$room_id",
-                    count: {$sum: 1},
-                    first_ts: {$min: "$origin_server_ts"},
-                    last_ts: {$max: "$origin_server_ts"}
-                }},
-                {$sort: {last_ts: -1}},
-                {$limit: 25}
-            ];
-            var results = db.events.aggregate(pipeline);
-            var rooms = [];
-            results.forEach(function(doc) {
-                function toDate(ts) {
-                    var high = ts.high || 0;
-                    var low = ts.low || ts;
-                    return new Date((high * 4294967296) + (low >>> 0));
-                }
-                rooms.push({
-                    room_id: doc._id,
-                    count: doc.count,
-                    first_message: toDate(doc.first_ts).toISOString(),
-                    last_message: toDate(doc.last_ts).toISOString()
-                });
-            });
-            print(JSON.stringify(rooms));
-            '''
-            result = subprocess.run(
-                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
-                capture_output=True, text=True, timeout=30
-            )
-            room_counts = json.loads(result.stdout.strip().split('\n')[-1]) if result.returncode == 0 else []
-            
-            # Get first message date
-            query = '''
-            var doc = db.events.find().sort({origin_server_ts: 1}).limit(1).next();
-            var ts = doc.origin_server_ts;
-            var high = ts.high || 0;
-            var low = ts.low || ts;
-            var timestamp = (high * 4294967296) + (low >>> 0);
-            print(new Date(timestamp).toISOString().split('T')[0]);
-            '''
-            result = subprocess.run(
-                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
-                capture_output=True, text=True, timeout=10
-            )
-            first_date = result.stdout.strip().split('\n')[-1] if result.returncode == 0 else 'Unknown'
-            
-            # Get hourly timeline (last 24 hours)
-            day_ago = int((datetime.now() - timedelta(hours=24)).timestamp() * 1000)
-            js_code = '''
-                var hours = {};
-                var dayAgo = ''' + str(day_ago) + ''';
-                db.events.find({"origin_server_ts": {$gt: dayAgo}}, {"origin_server_ts": 1}).forEach(function(doc) {
-                    var ts = doc.origin_server_ts;
-                    var high = ts.high || 0;
-                    var low = ts.low || ts;
-                    var timestamp = (high * 4294967296) + (low >>> 0);
-                    var hour = new Date(timestamp).getHours();
-                    hours[hour] = (hours[hour] || 0) + 1;
-                });
-                var result = [];
-                for (var i = 0; i < 24; i++) {
-                    result.push({hour: String(i) + ":00", count: hours[i] || 0});
-                }
-                print(JSON.stringify(result));
-            '''
-            query = js_code
-            result = subprocess.run(
-                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
-                capture_output=True, text=True, timeout=30
-            )
-            timeline = json.loads(result.stdout.strip().split('\n')[-1]) if result.returncode == 0 else []
-            
-            # Calculate hourly rate
-            hourly_rate = sum(t['count'] for t in timeline) / 24 if timeline else 0
-
-            # Get latest event timestamp for live freshness indicator
-            latest_query = '''
-            var doc = db.events.find().sort({origin_server_ts: -1}).limit(1).next();
-            var ts = doc.origin_server_ts;
-            var high = ts.high || 0;
-            var low = ts.low || ts;
-            var timestamp = (high * 4294967296) + (low >>> 0);
-            print(new Date(timestamp).toISOString());
-            '''
-            latest_result = subprocess.run(
-                ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', latest_query],
-                capture_output=True, text=True, timeout=10
-            )
-            latest_event_at = latest_result.stdout.strip().split('\n')[-1] if latest_result.returncode == 0 else None
-            
-            data = {
-                'total_messages': total_messages,
-                'unique_rooms': len(room_counts),
-                'first_message_date': first_date,
-                'messages_per_hour': hourly_rate,
-                'latest_event_at': latest_event_at,
-                'room_counts': room_counts,
-                'timeline': timeline
-            }
-            self.send_json(data)
+            self.send_json(get_indexer_snapshot_cached())
         except Exception as e:
             self.send_json({'error': str(e)})
+
+    def serve_indexer_events(self):
+        """Server-sent events stream for indexer stats (one-way push; no client queries accepted)."""
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Connection', 'keep-alive')
+        self.send_header('X-Accel-Buffering', 'no')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+        try:
+            while True:
+                payload = get_indexer_snapshot_cached()
+                msg = 'event: stats\n' + 'data: ' + json.dumps(payload) + '\n\n'
+                self.wfile.write(msg.encode('utf-8'))
+                self.wfile.flush()
+                time.sleep(INDEXER_HEARTBEAT_SECONDS)
+        except (BrokenPipeError, ConnectionResetError):
+            return
+        except Exception:
+            return
     
     def serve_indexer_series(self):
         """Serve per-room time series for selectable ranges."""
@@ -1585,6 +1742,9 @@ class DongometerHandler(BaseHTTPRequestHandler):
             parsed = urlparse(self.path)
             params = parse_qs(parsed.query)
             range_key = (params.get('range', ['24h'])[0] or '24h').lower()
+            mode = (params.get('mode', ['ingestion'])[0] or 'ingestion').lower()
+            if mode not in ('ingestion', 'event'):
+                mode = 'ingestion'
 
             range_map = {
                 '1h': (1, 5),
@@ -1600,36 +1760,57 @@ class DongometerHandler(BaseHTTPRequestHandler):
             query = """
             var startMs = START_MS;
             var bucketMs = BUCKET_MS;
+            var mode = MODE;
+
+            function oidFromMs(ms) {
+              var hex = Math.floor(ms / 1000).toString(16).padStart(8, '0');
+              return ObjectId(hex + '0000000000000000');
+            }
+
+            var matchTop = (mode === 'ingestion')
+              ? {_id: {$gt: oidFromMs(startMs)}}
+              : {origin_server_ts: {$gt: startMs}};
+
             var topRooms = db.events.aggregate([
-              {$match: {origin_server_ts: {$gt: startMs}}},
+              {$match: matchTop},
               {$group: {_id: "$room_id", count: {$sum: 1}}},
               {$sort: {count: -1}},
               {$limit: 6}
             ]).toArray().map(x => x._id);
 
+            var matchSeries = (mode === 'ingestion')
+              ? {$and: [{_id: {$gt: oidFromMs(startMs)}}, {room_id: {$in: topRooms}}]}
+              : {$and: [{origin_server_ts: {$gt: startMs}}, {room_id: {$in: topRooms}}]};
+
+            var timeExpr = (mode === 'ingestion')
+              ? {$toLong: {$toDate: "$_id"}}
+              : "$origin_server_ts";
+
             var pipe = [
-              {$match: {origin_server_ts: {$gt: startMs}, room_id: {$in: topRooms}}},
+              {$match: matchSeries},
               {$project: {
                 room_id: 1,
-                bucket: {$floor: {$divide: ["$origin_server_ts", bucketMs]}}
+                bucket: {$floor: {$divide: [timeExpr, bucketMs]}}
               }},
               {$group: {_id: {room_id: "$room_id", bucket: "$bucket"}, count: {$sum: 1}}},
               {$sort: {"_id.bucket": 1}}
             ];
 
             var agg = db.events.aggregate(pipe).toArray();
-            var labels = [];
-            var seriesMap = {};
 
+            var startBucket = Math.floor(startMs / bucketMs);
+            var endBucket = Math.floor(Date.now() / bucketMs);
+            var labels = [];
+            for (var b = startBucket; b <= endBucket; b++) labels.push(b);
+
+            var seriesMap = {};
             agg.forEach(function(d) {
               var room = d._id.room_id;
               var bucket = d._id.bucket;
               if (!seriesMap[room]) seriesMap[room] = {};
               seriesMap[room][bucket] = d.count;
-              if (labels.indexOf(bucket) === -1) labels.push(bucket);
             });
 
-            labels.sort(function(a,b){return a-b;});
             var outSeries = [];
             for (var room in seriesMap) {
               var pts = labels.map(function(b) { return seriesMap[room][b] || 0; });
@@ -1642,11 +1823,12 @@ class DongometerHandler(BaseHTTPRequestHandler):
 
             print(JSON.stringify({
               range: RANGE_KEY,
+              mode: mode,
               bucket_minutes: BUCKET_MIN,
               labels: labelText,
               series: outSeries
             }));
-            """.replace('START_MS', str(start_ms)).replace('BUCKET_MS', str(bucket_ms)).replace('RANGE_KEY', json.dumps(range_key)).replace('BUCKET_MIN', str(bucket_minutes))
+            """.replace('START_MS', str(start_ms)).replace('BUCKET_MS', str(bucket_ms)).replace('RANGE_KEY', json.dumps(range_key)).replace('BUCKET_MIN', str(bucket_minutes)).replace('MODE', json.dumps(mode))
 
             result = subprocess.run(
                 ['mongosh', '--quiet', 'mongodb://mongo:27017/matrix_index', '--eval', query],
@@ -1656,7 +1838,7 @@ class DongometerHandler(BaseHTTPRequestHandler):
                 self.send_json({'error': result.stderr.strip() or 'series query failed'})
                 return
 
-            payload = json.loads(result.stdout.strip().split('\n')[-1])
+            payload = json.loads(result.stdout.strip().split('\\n')[-1])
             self.send_json(payload)
         except Exception as e:
             self.send_json({'error': str(e)})
@@ -1877,6 +2059,9 @@ if __name__ == '__main__':
     
     # Start Fenthouse auto-poster daemon thread
     start_fenthouse_poster()
+
+    # Start indexer snapshot heartbeat loop (shared by API + SSE clients)
+    threading.Thread(target=indexer_snapshot_loop, daemon=True, name='indexer-snapshot').start()
     
     # Allow socket reuse to avoid "Address already in use" errors
     HTTPServer.allow_reuse_address = True

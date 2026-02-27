@@ -642,6 +642,36 @@
             <div class="metric-value" id="indexerCount">-</div>
             <div class="metric-label">Matrix Indexed Events</div>
         </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">🥾</div>
+            <div class="metric-value" id="daysKicked">-</div>
+            <div class="metric-label">Days Since Kick</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">🔨</div>
+            <div class="metric-value" id="daysBanned">-</div>
+            <div class="metric-label">Days Since Ban</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">🧽</div>
+            <div class="metric-value" id="daysRedacted">-</div>
+            <div class="metric-label">Days Since Redaction</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">⬇️</div>
+            <div class="metric-value" id="daysDownvoted">-</div>
+            <div class="metric-label">Days Since Downvote</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-icon">👎</div>
+            <div class="metric-value" id="daysThumbsDown">-</div>
+            <div class="metric-label">Days Since Thumbs Down</div>
+        </div>
     </div>
     
     <!-- CClub's Favorite Word Banner -->
@@ -814,6 +844,13 @@
                     const indexerEl = document.getElementById('indexerCount');
                     indexerEl.textContent = data.matrix_indexer_messages.toLocaleString();
                 }
+
+                const fmtDays = (v) => (v === null || v === undefined ? '—' : String(v));
+                document.getElementById('daysKicked').textContent = fmtDays(data.kicked_days_since);
+                document.getElementById('daysBanned').textContent = fmtDays(data.banned_days_since);
+                document.getElementById('daysRedacted').textContent = fmtDays(data.redacted_days_since);
+                document.getElementById('daysDownvoted').textContent = fmtDays(data.downvoted_days_since);
+                document.getElementById('daysThumbsDown').textContent = fmtDays(data.thumbs_down_days_since);
                 
                 // Update Dong Analytics Bar Graph
                 renderDongAnalytics(data);
